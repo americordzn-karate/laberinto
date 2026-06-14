@@ -558,20 +558,15 @@ function drawWall(x,y){
     ctx.fillStyle =
     "#1E4DFF";
 
-    const wallMargin =
-tileSize * 0.08;
+    ctx.fillRect(
 
-ctx.fillRect(
+        x*tileSize,
+        TOP_OFFSET + y*tileSize,
 
-    x*tileSize + wallMargin,
+        tileSize,
+        tileSize
 
-    TOP_OFFSET + y*tileSize + wallMargin,
-
-    tileSize - wallMargin*2,
-
-    tileSize - wallMargin*2
-
-);
+    );
 
 }
 
@@ -587,7 +582,7 @@ function drawEmoji(
 ){
 
     ctx.font =
-    `${tileSize*1.15}px Arial`;
+    `${tileSize*0.8}px Arial`;
 
     ctx.textAlign =
     "center";
@@ -1079,26 +1074,7 @@ function isWalkable(
 ===================================================== */
 
 function moveSensei(delta){
-const currentCellX =
-Math.round(sensei.x);
 
-const currentCellY =
-Math.round(sensei.y);
-
-if(
-    !isWalkable(
-        currentCellX,
-        currentCellY
-    )
-){
-
-    sensei.x =
-    currentCellX;
-
-    sensei.y =
-    currentCellY;
-
-}
     if(
         !gameRunning
     ) return;
@@ -1121,69 +1097,94 @@ if(
     sensei.y +
     moveY;
 
-    const margin = 0.25;
-
     let cellX =
-Math.round(nextX);
+    Math.round(nextX);
 
-let cellY =
-Math.round(nextY);
+    let cellY =
+    Math.round(nextY);
 
-    const leftCheck =
-Math.round(nextX - margin);
+    const y1 =
+Math.round(
+    sensei.y - 0.25
+);
 
-const rightCheck =
-Math.round(nextX + margin);
-
-const centerY =
-Math.round(sensei.y);
+const y2 =
+Math.round(
+    sensei.y + 0.25
+);
 
 if(
 
     isWalkable(
-        leftCheck,
-        centerY
+        cellX,
+        y1
     )
 
     &&
 
     isWalkable(
-        rightCheck,
-        centerY
+        cellX,
+        y2
     )
 
 ){
-    sensei.x = nextX;
+    sensei.x =
+    nextX;
 }
 
-    const topCheck =
-Math.round(nextY - margin);
+    const x1 =
+Math.round(
+    sensei.x - 0.25
+);
 
-const bottomCheck =
-Math.round(nextY + margin);
-
-const centerX =
-Math.round(sensei.x);
+const x2 =
+Math.round(
+    sensei.x + 0.25
+);
 
 if(
 
     isWalkable(
-        centerX,
-        topCheck
+        x1,
+        cellY
     )
 
     &&
 
     isWalkable(
-        centerX,
-        bottomCheck
+        x2,
+        cellY
     )
 
 ){
-    sensei.y = nextY;
+    sensei.y =
+    nextY;
 }
 
- 
+    /* CENTRADO AUTOMÁTICO */
+
+    const cx =
+    Math.round(sensei.x);
+
+    const cy =
+    Math.round(sensei.y);
+
+    if(
+        Math.abs(
+            sensei.x - cx
+        ) < 0.08
+    ){
+        sensei.x = cx;
+    }
+
+    if(
+        Math.abs(
+            sensei.y - cy
+        ) < 0.08
+    ){
+        sensei.y = cy;
+    }
+
 }
 
 
@@ -1402,36 +1403,28 @@ function isBlockedForNinja(x,y){
         return true;
     }
 
-    for(const star of estrellasBloqueo){
+    const targetX =
+    Math.round(sensei.x);
 
-    if(
-        star.x === x &&
-        star.y === y
+    const targetY =
+    Math.round(sensei.y);
+
+    for(
+        const star of estrellasBloqueo
     ){
-
-        const targetX =
-        Math.round(sensei.x);
-
-        const targetY =
-        Math.round(sensei.y);
-
-        if(
-            x === targetX &&
-            y === targetY
-        ){
-            return false;
-        }
-
-        return true;
-
-    }
-
-}{
 
         if(
             star.x === x &&
             star.y === y
         ){
+
+            if(
+                x === targetX &&
+                y === targetY
+            ){
+                return false;
+            }
+
             return true;
         }
 
@@ -1440,7 +1433,6 @@ function isBlockedForNinja(x,y){
     return false;
 
 }
-
 
 /* =====================================================
    A*
@@ -1648,15 +1640,6 @@ function moveNinjas(delta){
         sensei.y
     );
 
-    if(
-    !isWalkable(
-        targetX,
-        targetY
-    )
-){
-    return;
-}
-
     ninjas.forEach(
 
         ninja=>{
@@ -1686,58 +1669,22 @@ function moveNinjas(delta){
     path.length < 2
 ){
 
-    const dirs = [
+    const dist =
+    Math.hypot(
 
-        [1,0],
-        [-1,0],
-        [0,1],
-        [0,-1]
+        ninja.x -
+        sensei.x,
 
-    ];
+        ninja.y -
+        sensei.y
 
-    const posibles = [];
-
-    for(const d of dirs){
-
-        const nx =
-        startX + d[0];
-
-        const ny =
-        startY + d[1];
-
-        if(
-            !isBlockedForNinja(
-                nx,
-                ny
-            )
-        ){
-
-            posibles.push({
-                x:nx,
-                y:ny
-            });
-
-        }
-
-    }
+    );
 
     if(
-        posibles.length > 0
+        dist < 0.8
     ){
 
-        const randomMove =
-        posibles[
-            Math.floor(
-                Math.random() *
-                posibles.length
-            )
-        ];
-
-        ninja.x =
-        randomMove.x;
-
-        ninja.y =
-        randomMove.y;
+        loseGame();
 
     }
 
