@@ -558,15 +558,20 @@ function drawWall(x,y){
     ctx.fillStyle =
     "#1E4DFF";
 
-    ctx.fillRect(
+    const wallMargin =
+tileSize * 0.08;
 
-        x*tileSize,
-        TOP_OFFSET + y*tileSize,
+ctx.fillRect(
 
-        tileSize,
-        tileSize
+    x*tileSize + wallMargin,
 
-    );
+    TOP_OFFSET + y*tileSize + wallMargin,
+
+    tileSize - wallMargin*2,
+
+    tileSize - wallMargin*2
+
+);
 
 }
 
@@ -582,7 +587,7 @@ function drawEmoji(
 ){
 
     ctx.font =
-    `${tileSize*0.8}px Arial`;
+    `${tileSize*1.15}px Arial`;
 
     ctx.textAlign =
     "center";
@@ -1098,17 +1103,15 @@ function moveSensei(delta){
     moveY;
 
     let cellX =
-    Math.round(nextX);
+Math.floor(nextX + 0.3);
 
-    let cellY =
-    Math.round(nextY);
+let cellY =
+Math.floor(nextY + 0.3);
 
     if(
         isWalkable(
             cellX,
-            Math.round(
-                sensei.y
-            )
+            Math.floor(sensei.y + 0.3)
         )
     ){
         sensei.x =
@@ -1117,9 +1120,7 @@ function moveSensei(delta){
 
     if(
         isWalkable(
-            Math.round(
-                sensei.x
-            ),
+            Math.floor(sensei.x + 0.3),
             cellY
         )
     ){
@@ -1127,30 +1128,7 @@ function moveSensei(delta){
         nextY;
     }
 
-    /* CENTRADO AUTOMÁTICO */
-
-    const cx =
-    Math.round(sensei.x);
-
-    const cy =
-    Math.round(sensei.y);
-
-    if(
-        Math.abs(
-            sensei.x - cx
-        ) < 0.08
-    ){
-        sensei.x = cx;
-    }
-
-    if(
-        Math.abs(
-            sensei.y - cy
-        ) < 0.08
-    ){
-        sensei.y = cy;
-    }
-
+ 
 }
 
 
