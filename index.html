@@ -1,1 +1,2185 @@
-En construcción
+<!DOCTYPE html>
+<html lang="es">
+<head>
+
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+
+<title>LABERINTO</title>
+
+<style>
+
+*{
+    margin:0;
+    padding:0;
+    box-sizing:border-box;
+    font-family:Arial,Helvetica,sans-serif;
+}
+
+body{
+    background:#111;
+    color:white;
+    overflow:hidden;
+    touch-action:none;
+}
+
+#pantallaInicio{
+    position:absolute;
+    inset:0;
+    background:#111;
+    display:flex;
+    flex-direction:column;
+    justify-content:center;
+    align-items:center;
+    gap:20px;
+    z-index:50;
+    padding:20px;
+}
+
+#pantallaInicio h1{
+    font-size:42px;
+    color:#FFD700;
+}
+
+#pantallaInicio p{
+    text-align:center;
+    max-width:500px;
+    line-height:1.5;
+}
+
+button{
+    border:none;
+    border-radius:10px;
+    padding:12px 24px;
+    font-size:18px;
+    font-weight:bold;
+    cursor:pointer;
+}
+
+#btnIniciar{
+    background:#2ecc71;
+    color:white;
+}
+
+#btnIniciar:disabled{
+    background:#555;
+    cursor:not-allowed;
+}
+
+#btnSoltar{
+    background:#f39c12;
+    color:white;
+}
+
+#gameContainer{
+    width:100vw;
+    height:100vh;
+    display:none;
+    position:relative;
+}
+
+#hud{
+    position:absolute;
+    top:10px;
+    left:10px;
+    right:10px;
+    z-index:20;
+
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+
+    background:rgba(0,0,0,.75);
+
+    border-radius:12px;
+
+    padding:10px;
+}
+
+.hudBox{
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+}
+
+.hudLabel{
+    font-size:12px;
+}
+
+.hudValue{
+    font-size:22px;
+    font-weight:bold;
+}
+
+#canvas{
+    background:#000;
+    width:100%;
+    height:100%;
+    display:block;
+}
+
+#controles{
+    position:absolute;
+    bottom:25px;
+    left:25px;
+    z-index:30;
+}
+
+#joystickBase{
+    width:120px;
+    height:120px;
+    border-radius:50%;
+    background:rgba(255,255,255,.15);
+    border:3px solid rgba(255,255,255,.25);
+    position:relative;
+}
+
+#joystickStick{
+    width:55px;
+    height:55px;
+    border-radius:50%;
+    background:#FFF;
+    position:absolute;
+    left:32px;
+    top:32px;
+}
+
+#acciones{
+    position:absolute;
+    bottom:40px;
+    right:20px;
+    z-index:30;
+}
+
+#mensajeFinal{
+    position:absolute;
+    inset:0;
+    display:none;
+    flex-direction:column;
+    justify-content:center;
+    align-items:center;
+    background:rgba(0,0,0,.9);
+    z-index:100;
+    gap:20px;
+}
+
+#mensajeTitulo{
+    font-size:42px;
+    text-align:center;
+}
+
+#mensajePuntos{
+    font-size:34px;
+    color:#FFD700;
+}
+
+</style>
+
+</head>
+
+<body>
+
+<div id="pantallaInicio">
+
+    <h1>LABERINTO</h1>
+
+    <p>
+        Sobrevive durante 60 segundos evitando ser atrapado por los ninjas.
+        Recoge estrellas, bloquea caminos y utiliza el poder STOP para ganar.
+    </p>
+
+    <div id="datosJugador"></div>
+
+    <button id="btnIniciar" disabled>
+        INICIAR
+    </button>
+
+    <div id="estadoIntentos">
+        Verificando intentos disponibles...
+    </div>
+
+</div>
+
+<div id="gameContainer">
+
+    <div id="hud">
+
+        <div class="hudBox">
+            <div class="hudLabel">TIEMPO</div>
+            <div class="hudValue" id="hudTiempo">60</div>
+        </div>
+
+        <div class="hudBox">
+            <div class="hudLabel">ESTRELLAS</div>
+            <div class="hudValue" id="hudEstrellas">0</div>
+        </div>
+
+        <div class="hudBox">
+            <div class="hudLabel">PUNTOS</div>
+            <div class="hudValue" id="hudPuntos">0</div>
+        </div>
+
+    </div>
+
+    <canvas id="canvas"></canvas>
+
+    <div id="controles">
+
+        <div id="joystickBase">
+            <div id="joystickStick"></div>
+        </div>
+
+    </div>
+
+    <div id="acciones">
+
+        <button id="btnSoltar">
+            ⭐ SOLTAR
+        </button>
+
+    </div>
+
+</div>
+
+<div id="mensajeFinal">
+
+    <div id="mensajeTitulo"></div>
+
+    <div id="mensajePuntos"></div>
+
+</div>
+
+<script>
+
+const SCRIPT_URL =
+"https://script.google.com/macros/s/AKfycbwX5w8iiwkJVbGtpz-5f20U9jue2MC0vouE3blkHXo9CIMqg9bvCZrAYE8WKxH4gXGWzg/exec";
+
+const PORTAL_URL =
+"https://americordzn-karate.github.io/retos/";
+
+const GRID_SIZE = 21;
+
+const GAME_DURATION = 60;
+
+let nombre = "";
+let edad = "";
+let reto = "";
+let estatura = "";
+let peso = "";
+
+const params =
+new URLSearchParams(window.location.search);
+
+nombre =
+params.get("nombre") || "";
+
+edad =
+params.get("edad") || "";
+
+reto =
+params.get("reto") || "LABERINTO";
+
+estatura =
+params.get("estatura") || "";
+
+peso =
+params.get("peso") || "";
+
+document.getElementById("datosJugador").innerHTML =
+`
+<b>${nombre}</b><br>
+Edad: ${edad}<br>
+Estatura: ${estatura} cm<br>
+Peso: ${peso} kg
+`;
+
+let intentosPermitidos = 0;
+let intentosRealizados = 0;
+
+let canvas =
+document.getElementById("canvas");
+
+let ctx =
+canvas.getContext("2d");
+
+let tileSize = 0;
+
+let gameRunning = false;
+
+let gameStartTime = 0;
+
+let remainingTime = GAME_DURATION;
+
+let puntos = 0;
+
+let estrellasInventario = 0;
+
+let stopDisponible = true;
+
+let stopActivo = false;
+
+let stopAparecio = false;
+
+let ninjaSpeedMultiplier = 1;
+
+let animationFrame;
+
+let touchDirection = {
+    x:0,
+    y:0
+};
+
+let maze = [];
+
+let estrellasMapa = [];
+
+let estrellasBloqueo = [];
+
+let stopItem = null;
+
+let sensei = null;
+
+let ninjas = [];
+
+window.addEventListener(
+    "resize",
+    resizeCanvas
+);
+
+function resizeCanvas(){
+
+    canvas.width =
+    window.innerWidth;
+
+    canvas.height =
+    window.innerHeight;
+
+    tileSize =
+    Math.min(
+        canvas.width,
+        canvas.height
+    ) / GRID_SIZE;
+}
+
+resizeCanvas();
+
+/* =====================================================
+   LABERINTO 21x21
+===================================================== */
+
+const MAZE_TEMPLATE = [
+
+"111111111111111111111",
+"100000000010000000001",
+"101111111010111111101",
+"101000001000100000101",
+"101011101110111010101",
+"100010000000000010001",
+"111010111011101011101",
+"100010100000001010001",
+"101110101111101011101",
+"100000100000001000001",
+"111110111011101111101",
+"100000001000100000001",
+"101111101110101111101",
+"101000000000000000101",
+"101011111011111110101",
+"100010000010000010001",
+"111010111110111010111",
+"100010000000000010001",
+"101111111011111111101",
+"100000000000000000001",
+"111111111111111111111"
+
+];
+
+
+/* =====================================================
+   CREACIÓN DEL LABERINTO
+===================================================== */
+
+function createMaze(){
+
+    maze = [];
+
+    for(let y=0;y<GRID_SIZE;y++){
+
+        maze[y] = [];
+
+        for(let x=0;x<GRID_SIZE;x++){
+
+            maze[y][x] =
+            parseInt(
+                MAZE_TEMPLATE[y][x]
+            );
+
+        }
+
+    }
+
+}
+
+
+/* =====================================================
+   POSICIONES INICIALES
+===================================================== */
+
+function createCharacters(){
+
+    sensei = {
+
+        x:1,
+        y:1,
+
+        dirX:0,
+        dirY:0,
+
+        speed:2.2,
+
+        emoji:"🥋"
+
+    };
+
+    ninjas = [
+
+        {
+            x:19,
+            y:1,
+            speed:2.0,
+            emoji:"🥷"
+        },
+
+        {
+            x:1,
+            y:19,
+            speed:2.0,
+            emoji:"🥷"
+        },
+
+        {
+            x:19,
+            y:19,
+            speed:2.0,
+            emoji:"🥷"
+        }
+
+    ];
+
+}
+
+
+/* =====================================================
+   CASILLAS LIBRES
+===================================================== */
+
+function getRandomFreeCell(){
+
+    while(true){
+
+        let x =
+        Math.floor(
+            Math.random()*GRID_SIZE
+        );
+
+        let y =
+        Math.floor(
+            Math.random()*GRID_SIZE
+        );
+
+        if(maze[y][x] !== 0)
+            continue;
+
+        if(
+            (x===1 && y===1) ||
+            (x===19 && y===1) ||
+            (x===1 && y===19) ||
+            (x===19 && y===19)
+        ){
+            continue;
+        }
+
+        return {x,y};
+
+    }
+
+}
+
+
+/* =====================================================
+   ESTRELLAS
+===================================================== */
+
+function generateStars(){
+
+    estrellasMapa = [];
+
+    for(let i=0;i<4;i++){
+
+        let pos =
+        getRandomFreeCell();
+
+        estrellasMapa.push({
+
+            x:pos.x,
+            y:pos.y,
+            active:true
+
+        });
+
+    }
+
+}
+
+
+/* =====================================================
+   STOP
+===================================================== */
+
+function createStopItem(){
+
+    let pos =
+    getRandomFreeCell();
+
+    stopItem = {
+
+        x:pos.x,
+        y:pos.y,
+
+        active:true
+
+    };
+
+}
+
+
+/* =====================================================
+   DIBUJAR MURO
+===================================================== */
+
+function drawWall(x,y){
+
+    ctx.fillStyle =
+    "#1E4DFF";
+
+    ctx.fillRect(
+
+        x*tileSize,
+        y*tileSize,
+
+        tileSize,
+        tileSize
+
+    );
+
+}
+
+
+/* =====================================================
+   DIBUJAR EMOJI
+===================================================== */
+
+function drawEmoji(
+    emoji,
+    x,
+    y
+){
+
+    ctx.font =
+    `${tileSize*0.8}px Arial`;
+
+    ctx.textAlign =
+    "center";
+
+    ctx.textBaseline =
+    "middle";
+
+    ctx.fillText(
+
+        emoji,
+
+        x*tileSize + tileSize/2,
+
+        y*tileSize + tileSize/2
+
+    );
+
+}
+
+
+/* =====================================================
+   DIBUJAR ESTRELLAS
+===================================================== */
+
+function drawStars(){
+
+    estrellasMapa.forEach(star=>{
+
+        if(!star.active)
+            return;
+
+        drawEmoji(
+            "⭐",
+            star.x,
+            star.y
+        );
+
+    });
+
+}
+
+
+/* =====================================================
+   DIBUJAR BLOQUEOS
+===================================================== */
+
+function drawPlacedStars(){
+
+    estrellasBloqueo.forEach(star=>{
+
+        drawEmoji(
+            "⭐",
+            star.x,
+            star.y
+        );
+
+    });
+
+}
+
+
+/* =====================================================
+   DIBUJAR STOP
+===================================================== */
+
+function drawStop(){
+
+    if(
+        !stopItem ||
+        !stopItem.active
+    ){
+        return;
+    }
+
+    drawEmoji(
+        "🛑",
+        stopItem.x,
+        stopItem.y
+    );
+
+}
+
+
+/* =====================================================
+   DIBUJAR LABERINTO
+===================================================== */
+
+function drawMaze(){
+
+    ctx.clearRect(
+        0,
+        0,
+        canvas.width,
+        canvas.height
+    );
+
+    for(
+        let y=0;
+        y<GRID_SIZE;
+        y++
+    ){
+
+        for(
+            let x=0;
+            x<GRID_SIZE;
+            x++
+        ){
+
+            if(
+                maze[y][x] === 1
+            ){
+
+                drawWall(x,y);
+
+            }
+
+        }
+
+    }
+
+}
+
+
+/* =====================================================
+   RENDER COMPLETO
+===================================================== */
+
+function render(){
+
+    drawMaze();
+
+    drawStars();
+
+    drawPlacedStars();
+
+    drawStop();
+
+    drawEmoji(
+        sensei.emoji,
+        sensei.x,
+        sensei.y
+    );
+
+    ninjas.forEach(ninja=>{
+
+        drawEmoji(
+            ninja.emoji,
+            ninja.x,
+            ninja.y
+        );
+
+    });
+
+}
+
+
+/* =====================================================
+   APARICIÓN DEL STOP
+===================================================== */
+
+function updateStopSpawn(){
+
+    if(stopAparecio)
+        return;
+
+    let elapsed =
+    (
+        Date.now()
+        -
+        gameStartTime
+    )/1000;
+
+    if(
+    !window.stopSpawnTime
+){
+    window.stopSpawnTime =
+    10 + Math.random()*10;
+}
+
+if(
+    elapsed >=
+    window.stopSpawnTime
+){
+
+        createStopItem();
+
+        stopAparecio =
+        true;
+
+    }
+
+}
+
+
+/* =====================================================
+   INICIALIZACIÓN
+===================================================== */
+
+createMaze();
+
+createCharacters();
+
+generateStars();
+
+render();
+
+/* =====================================================
+   AUDIO
+===================================================== */
+
+const audioCtx =
+new (
+    window.AudioContext ||
+    window.webkitAudioContext
+)();
+
+function playTone(
+    freq,
+    duration,
+    type="sine"
+){
+
+    const osc =
+    audioCtx.createOscillator();
+
+    const gain =
+    audioCtx.createGain();
+
+    osc.type = type;
+
+    osc.frequency.value =
+    freq;
+
+    osc.connect(gain);
+
+    gain.connect(
+        audioCtx.destination
+    );
+
+    gain.gain.value = 0.15;
+
+    osc.start();
+
+    gain.gain.exponentialRampToValueAtTime(
+        0.0001,
+        audioCtx.currentTime +
+        duration
+    );
+
+    osc.stop(
+        audioCtx.currentTime +
+        duration
+    );
+
+}
+
+function soundCollectStar(){
+
+    playTone(
+        900,
+        0.12,
+        "triangle"
+    );
+
+    setTimeout(()=>{
+
+        playTone(
+            1200,
+            0.12,
+            "triangle"
+        );
+
+    },60);
+
+}
+
+function soundPlaceStar(){
+
+    playTone(
+        400,
+        0.18,
+        "square"
+    );
+
+}
+
+function soundStop(){
+
+    playTone(
+        250,
+        0.25,
+        "sawtooth"
+    );
+
+    setTimeout(()=>{
+
+        playTone(
+            500,
+            0.25,
+            "sawtooth"
+        );
+
+    },100);
+
+}
+
+function soundWin(){
+
+    playTone(600,.15);
+    setTimeout(()=>playTone(800,.15),150);
+    setTimeout(()=>playTone(1000,.25),300);
+
+}
+
+function soundLose(){
+
+    playTone(
+        250,
+        .45,
+        "square"
+    );
+
+}
+
+
+/* =====================================================
+   JOYSTICK
+===================================================== */
+
+const joystickBase =
+document.getElementById(
+    "joystickBase"
+);
+
+const joystickStick =
+document.getElementById(
+    "joystickStick"
+);
+
+let joystickActive =
+false;
+
+const JOY_RADIUS = 45;
+
+joystickBase.addEventListener(
+
+    "touchstart",
+
+    e=>{
+
+        joystickActive =
+        true;
+
+        updateJoystick(e);
+
+    }
+
+);
+
+joystickBase.addEventListener(
+
+    "touchmove",
+
+    e=>{
+
+        if(
+            !joystickActive
+        ) return;
+
+        updateJoystick(e);
+
+    }
+
+);
+
+joystickBase.addEventListener(
+
+    "touchend",
+
+    ()=>{
+
+        joystickActive =
+        false;
+
+        touchDirection.x = 0;
+        touchDirection.y = 0;
+
+        joystickStick.style.left =
+        "32px";
+
+        joystickStick.style.top =
+        "32px";
+
+    }
+
+);
+
+function updateJoystick(e){
+
+    const rect =
+    joystickBase.getBoundingClientRect();
+
+    const touch =
+    e.touches[0];
+
+    let dx =
+    touch.clientX -
+    (rect.left + 60);
+
+    let dy =
+    touch.clientY -
+    (rect.top + 60);
+
+    const distance =
+    Math.sqrt(
+        dx*dx +
+        dy*dy
+    );
+
+    if(
+        distance >
+        JOY_RADIUS
+    ){
+
+        dx =
+        dx / distance *
+        JOY_RADIUS;
+
+        dy =
+        dy / distance *
+        JOY_RADIUS;
+
+    }
+
+    joystickStick.style.left =
+    (32 + dx) + "px";
+
+    joystickStick.style.top =
+    (32 + dy) + "px";
+
+    touchDirection.x =
+    dx / JOY_RADIUS;
+
+    touchDirection.y =
+    dy / JOY_RADIUS;
+
+}
+
+
+/* =====================================================
+   VALIDACIÓN DE MOVIMIENTO
+===================================================== */
+
+function isWalkable(
+    x,
+    y
+){
+
+    if(
+        x < 0 ||
+        y < 0 ||
+        x >= GRID_SIZE ||
+        y >= GRID_SIZE
+    ){
+        return false;
+    }
+
+    return (
+        maze[y][x] === 0
+    );
+
+}
+
+
+/* =====================================================
+   MOVIMIENTO SENSEI
+===================================================== */
+
+function moveSensei(delta){
+
+    if(
+        !gameRunning
+    ) return;
+
+    let moveX =
+    touchDirection.x *
+    sensei.speed *
+    delta;
+
+    let moveY =
+    touchDirection.y *
+    sensei.speed *
+    delta;
+
+    let nextX =
+    sensei.x +
+    moveX;
+
+    let nextY =
+    sensei.y +
+    moveY;
+
+    let cellX =
+    Math.round(nextX);
+
+    let cellY =
+    Math.round(nextY);
+
+    if(
+        isWalkable(
+            cellX,
+            Math.round(
+                sensei.y
+            )
+        )
+    ){
+        sensei.x =
+        nextX;
+    }
+
+    if(
+        isWalkable(
+            Math.round(
+                sensei.x
+            ),
+            cellY
+        )
+    ){
+        sensei.y =
+        nextY;
+    }
+
+}
+
+
+/* =====================================================
+   RECOGER ESTRELLAS
+===================================================== */
+
+function checkStarCollection(){
+
+    estrellasMapa.forEach(
+
+        star=>{
+
+            if(
+                !star.active
+            ) return;
+
+            const dist =
+            Math.hypot(
+
+                star.x -
+                sensei.x,
+
+                star.y -
+                sensei.y
+
+            );
+
+            if(
+                dist < 0.5
+            ){
+
+                star.active =
+                false;
+
+                estrellasInventario++;
+
+                document
+                .getElementById(
+                    "hudEstrellas"
+                )
+                .textContent =
+                estrellasInventario;
+
+                soundCollectStar();
+
+            }
+
+        }
+
+    );
+
+}
+
+
+/* =====================================================
+   SOLTAR ESTRELLA
+===================================================== */
+
+document
+.getElementById(
+    "btnSoltar"
+)
+.addEventListener(
+
+    "click",
+
+    ()=>{
+
+        if(
+            estrellasInventario <= 0
+        ) return;
+
+        const gx =
+        Math.round(
+            sensei.x
+        );
+
+        const gy =
+        Math.round(
+            sensei.y
+        );
+
+        estrellasBloqueo.push({
+
+            x:gx,
+            y:gy
+
+        });
+
+        estrellasInventario--;
+
+        document
+        .getElementById(
+            "hudEstrellas"
+        )
+        .textContent =
+        estrellasInventario;
+
+        soundPlaceStar();
+
+    }
+
+);
+
+
+/* =====================================================
+   ACTIVAR STOP
+===================================================== */
+
+function checkStopPickup(){
+
+    if(
+        !stopItem ||
+        !stopItem.active
+    ){
+        return;
+    }
+
+    const dist =
+    Math.hypot(
+
+        stopItem.x -
+        sensei.x,
+
+        stopItem.y -
+        sensei.y
+
+    );
+
+    if(
+        dist > 0.5
+    ){
+        return;
+    }
+
+    stopItem.active =
+    false;
+
+    stopActivo =
+    true;
+
+    soundStop();
+
+    setTimeout(()=>{
+
+        stopActivo =
+        false;
+
+        ninjaSpeedMultiplier *=
+        1.2;
+
+    },5000);
+
+}
+
+
+/* =====================================================
+   ACTUALIZACIÓN SENSEI
+===================================================== */
+
+function updateSensei(
+    delta
+){
+
+    moveSensei(
+        delta
+    );
+
+    checkStarCollection();
+
+    checkStopPickup();
+
+}
+
+/* =====================================================
+   NODOS VÁLIDOS
+===================================================== */
+
+function isBlockedForNinja(x,y){
+
+    if(
+        x < 0 ||
+        y < 0 ||
+        x >= GRID_SIZE ||
+        y >= GRID_SIZE
+    ){
+        return true;
+    }
+
+    if(
+        maze[y][x] === 1
+    ){
+        return true;
+    }
+
+    for(
+        const star of estrellasBloqueo
+    ){
+
+        if(
+            star.x === x &&
+            star.y === y
+        ){
+            return true;
+        }
+
+    }
+
+    return false;
+
+}
+
+
+/* =====================================================
+   A*
+===================================================== */
+
+function heuristic(ax,ay,bx,by){
+
+    return (
+        Math.abs(ax-bx) +
+        Math.abs(ay-by)
+    );
+
+}
+
+function nodeKey(x,y){
+
+    return `${x}_${y}`;
+
+}
+
+function getPath(startX,startY,endX,endY){
+
+    const open = [];
+
+    const closed = new Set();
+
+    open.push({
+
+        x:startX,
+        y:startY,
+
+        g:0,
+
+        h:heuristic(
+            startX,
+            startY,
+            endX,
+            endY
+        ),
+
+        parent:null
+
+    });
+
+    while(
+        open.length > 0
+    ){
+
+        open.sort(
+            (a,b)=>
+            (a.g+a.h) -
+            (b.g+b.h)
+        );
+
+        const current =
+        open.shift();
+
+        if(
+            current.x === endX &&
+            current.y === endY
+        ){
+
+            const path=[];
+
+            let n=current;
+
+            while(n){
+
+                path.unshift({
+
+                    x:n.x,
+                    y:n.y
+
+                });
+
+                n=n.parent;
+
+            }
+
+            return path;
+
+        }
+
+        closed.add(
+            nodeKey(
+                current.x,
+                current.y
+            )
+        );
+
+        const dirs = [
+
+            [1,0],
+            [-1,0],
+            [0,1],
+            [0,-1]
+
+        ];
+
+        for(
+            const d of dirs
+        ){
+
+            const nx =
+            current.x + d[0];
+
+            const ny =
+            current.y + d[1];
+
+            if(
+                isBlockedForNinja(
+                    nx,
+                    ny
+                )
+            ){
+                continue;
+            }
+
+            const key =
+            nodeKey(nx,ny);
+
+            if(
+                closed.has(key)
+            ){
+                continue;
+            }
+
+            const g =
+            current.g + 1;
+
+            const h =
+            heuristic(
+                nx,
+                ny,
+                endX,
+                endY
+            );
+
+            const existing =
+            open.find(
+                n=>
+                n.x===nx &&
+                n.y===ny
+            );
+
+            if(
+                existing
+            ){
+
+                if(
+                    g < existing.g
+                ){
+
+                    existing.g =
+                    g;
+
+                    existing.parent =
+                    current;
+
+                }
+
+            }
+            else{
+
+                open.push({
+
+                    x:nx,
+                    y:ny,
+                    g,
+                    h,
+                    parent:current
+
+                });
+
+            }
+
+        }
+
+    }
+
+    return [];
+
+}
+
+
+/* =====================================================
+   MOVIMIENTO NINJAS
+===================================================== */
+
+function moveNinjas(delta){
+
+    if(
+        stopActivo
+    ){
+        return;
+    }
+
+    const targetX =
+    Math.round(
+        sensei.x
+    );
+
+    const targetY =
+    Math.round(
+        sensei.y
+    );
+
+    ninjas.forEach(
+
+        ninja=>{
+
+            const startX =
+            Math.round(
+                ninja.x
+            );
+
+            const startY =
+            Math.round(
+                ninja.y
+            );
+
+            const path =
+            getPath(
+
+                startX,
+                startY,
+
+                targetX,
+                targetY
+
+            );
+
+            if(
+                path.length < 2
+            ){
+                return;
+            }
+
+            const next =
+            path[1];
+
+            const dx =
+            next.x -
+            ninja.x;
+
+            const dy =
+            next.y -
+            ninja.y;
+
+            const speed =
+            ninja.speed *
+            ninjaSpeedMultiplier;
+
+            ninja.x +=
+            dx *
+            speed *
+            delta;
+
+            ninja.y +=
+            dy *
+            speed *
+            delta;
+
+        }
+
+    );
+
+}
+
+
+/* =====================================================
+   CAPTURA
+===================================================== */
+
+function checkCapture(){
+
+    for(
+        const ninja of ninjas
+    ){
+
+        const dist =
+        Math.hypot(
+
+            ninja.x -
+            sensei.x,
+
+            ninja.y -
+            sensei.y
+
+        );
+
+        if(
+            dist < 0.55
+        ){
+
+            loseGame();
+
+            return;
+
+        }
+
+    }
+
+}
+
+
+/* =====================================================
+   TEMPORIZADOR
+===================================================== */
+
+function updateTimer(){
+
+    if(
+        !gameRunning
+    ){
+        return;
+    }
+
+    const elapsed =
+    (
+        Date.now() -
+        gameStartTime
+    ) / 1000;
+
+    remainingTime =
+    Math.max(
+        0,
+        GAME_DURATION -
+        Math.floor(elapsed)
+    );
+
+    document
+    .getElementById(
+        "hudTiempo"
+    )
+    .textContent =
+    remainingTime;
+
+    if(
+        elapsed >=
+        GAME_DURATION
+    ){
+
+        winGame();
+
+    }
+
+}
+
+
+/* =====================================================
+   FIN DE PARTIDA
+===================================================== */
+
+let gameEnded =
+false;
+
+function showFinalScreen(
+    title,
+    pts
+){
+
+    const panel =
+    document.getElementById(
+        "mensajeFinal"
+    );
+
+    panel.style.display =
+    "flex";
+
+    document
+    .getElementById(
+        "mensajeTitulo"
+    )
+    .textContent =
+    title;
+
+    document
+    .getElementById(
+        "mensajePuntos"
+    )
+    .textContent =
+    `${pts} puntos`;
+
+}
+
+function winGame(){
+document
+.getElementById(
+    "hudPuntos"
+)
+.textContent =
+"20";
+    if(
+        gameEnded
+    ) return;
+
+    gameEnded = true;
+
+    gameRunning = false;
+
+    puntos = 20;
+
+    soundWin();
+
+    showFinalScreen(
+
+        "¡MISIÓN COMPLETADA!",
+
+        "+20"
+
+    );
+
+    sendResultAndExit();
+
+}
+
+function loseGame(){
+document
+.getElementById(
+    "hudPuntos"
+)
+.textContent =
+"-10";
+    if(
+        gameEnded
+    ) return;
+
+    gameEnded = true;
+
+    gameRunning = false;
+
+    puntos = -10;
+
+    soundLose();
+
+    showFinalScreen(
+
+        "¡CAPTURADO POR LOS NINJAS!",
+
+        "-10"
+
+    );
+
+    sendResultAndExit();
+
+}
+
+
+/* =====================================================
+   UPDATE PRINCIPAL
+===================================================== */
+
+function updateGame(delta){
+
+    if(
+        !gameRunning
+    ){
+        return;
+    }
+
+    updateSensei(
+        delta
+    );
+
+    updateStopSpawn();
+
+    moveNinjas(
+        delta
+    );
+
+    checkCapture();
+
+    updateTimer();
+
+}
+
+
+/* =====================================================
+   GAME LOOP
+===================================================== */
+
+let lastTime =
+performance.now();
+
+function gameLoop(now){
+
+    const delta =
+    (now-lastTime)/1000;
+
+    lastTime =
+    now;
+
+    updateGame(
+        delta
+    );
+
+    render();
+
+    animationFrame =
+    requestAnimationFrame(
+        gameLoop
+    );
+
+}
+
+/* =====================================================
+   CONSULTA APPS SCRIPT
+===================================================== */
+
+async function verificarIntentos(){
+
+    try{
+
+        const response =
+        await fetch(
+            SCRIPT_URL
+        );
+
+        const data =
+        await response.json();
+
+        const retoInfo =
+        data.retos.find(
+
+            r=>
+            r.nombre
+            .toUpperCase()
+            ===
+            "LABERINTO"
+
+        );
+
+        if(
+            !retoInfo
+        ){
+
+            document
+            .getElementById(
+                "estadoIntentos"
+            )
+            .textContent =
+            "Reto no encontrado";
+
+            return;
+
+        }
+
+        intentosPermitidos =
+        Number(
+            retoInfo.diario_permitido
+        ) || 0;
+
+        const key =
+        `${nombre}_LABERINTO`;
+
+        intentosRealizados =
+        Number(
+            data.intentosHoy[key]
+        ) || 0;
+
+        const disponible =
+        intentosRealizados <
+        intentosPermitidos;
+
+        const btn =
+        document
+        .getElementById(
+            "btnIniciar"
+        );
+
+        btn.disabled =
+        !disponible;
+
+        document
+        .getElementById(
+            "estadoIntentos"
+        )
+        .textContent =
+
+        disponible
+
+        ?
+
+        `Intentos disponibles: ${
+            intentosPermitidos -
+            intentosRealizados
+        }`
+
+        :
+
+        "Has alcanzado el límite diario";
+
+    }
+    catch(error){
+
+        console.error(error);
+
+        document
+        .getElementById(
+            "estadoIntentos"
+        )
+        .textContent =
+        "Error de conexión";
+
+    }
+
+}
+
+
+/* =====================================================
+   ENVÍO DE RESULTADO
+===================================================== */
+
+async function sendResult(){
+
+    try{
+
+        await fetch(
+
+            SCRIPT_URL,
+
+            {
+
+                method:"POST",
+
+                headers:{
+
+                    "Content-Type":
+                    "application/json"
+
+                },
+
+                body:JSON.stringify({
+
+                    nombre_alumno:
+                    nombre,
+
+                    nombre_reto:
+                    "LABERINTO",
+
+                    puntos:
+                    puntos
+
+                })
+
+            }
+
+        );
+
+    }
+    catch(error){
+
+        console.error(error);
+
+    }
+
+}
+
+
+/* =====================================================
+   REGRESAR AL PORTAL
+===================================================== */
+
+function regresarPortal(){
+
+    const params =
+    new URLSearchParams({
+
+        nombre,
+        edad,
+        reto,
+        estatura,
+        peso
+
+    });
+
+    window.location.href =
+
+    `${PORTAL_URL}?${params}`;
+
+}
+
+
+/* =====================================================
+   GUARDAR Y SALIR
+===================================================== */
+
+async function sendResultAndExit(){
+
+    await sendResult();
+
+    setTimeout(
+
+        ()=>{
+
+            regresarPortal();
+
+        },
+
+        3500
+
+    );
+
+}
+
+
+/* =====================================================
+   INICIO DE PARTIDA
+===================================================== */
+
+function startGame(){
+
+    document
+    .getElementById(
+        "pantallaInicio"
+    )
+    .style.display =
+    "none";
+
+    document
+    .getElementById(
+        "gameContainer"
+    )
+    .style.display =
+    "block";
+
+    gameRunning =
+    true;
+
+    gameEnded =
+    false;
+
+    puntos = 0;
+
+    remainingTime =
+    GAME_DURATION;
+
+    stopActivo =
+    false;
+
+    stopAparecio =
+    false;
+
+    stopItem =
+    null;
+
+    ninjaSpeedMultiplier =
+    1;
+
+    estrellasInventario =
+    0;
+
+    estrellasBloqueo =
+    [];
+
+    document
+    .getElementById(
+        "hudEstrellas"
+    )
+    .textContent =
+    "0";
+
+    document
+    .getElementById(
+        "hudPuntos"
+    )
+    .textContent =
+    "0";
+
+    createMaze();
+
+    createCharacters();
+
+    generateStars();
+
+    gameStartTime =
+    Date.now();
+
+    lastTime =
+    performance.now();
+
+    requestAnimationFrame(
+        gameLoop
+    );
+
+}
+
+
+/* =====================================================
+   BOTÓN INICIAR
+===================================================== */
+
+document
+.getElementById(
+    "btnIniciar"
+)
+.addEventListener(
+
+    "click",
+
+    ()=>{
+
+        if(
+            audioCtx.state ===
+            "suspended"
+        ){
+
+            audioCtx.resume();
+
+        }
+
+        startGame();
+
+    }
+
+);
+
+
+/* =====================================================
+   PREVENIR SCROLL
+===================================================== */
+
+document
+.addEventListener(
+
+    "touchmove",
+
+    function(e){
+
+        e.preventDefault();
+
+    },
+
+    {
+        passive:false
+    }
+
+);
+
+
+/* =====================================================
+   ARRANQUE
+===================================================== */
+
+verificarIntentos();
+
+</script>
+
+</body>
+</html>
+
