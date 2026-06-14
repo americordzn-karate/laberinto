@@ -120,8 +120,8 @@ button{
 
 #controles{
     position:absolute;
-    bottom:25px;
-    left:25px;
+    bottom:140px;
+    left:20px;
     z-index:30;
 }
 
@@ -146,7 +146,7 @@ button{
 
 #acciones{
     position:absolute;
-    bottom:40px;
+    bottom:170px;
     right:20px;
     z-index:30;
 }
@@ -260,7 +260,7 @@ const PORTAL_URL =
 const GRID_SIZE = 21;
 
 const GAME_DURATION = 60;
-
+const TOP_OFFSET = 70;
 let nombre = "";
 let edad = "";
 let reto = "";
@@ -287,10 +287,7 @@ params.get("peso") || "";
 
 document.getElementById("datosJugador").innerHTML =
 `
-<b>${nombre}</b><br>
-Edad: ${edad}<br>
-Estatura: ${estatura} cm<br>
-Peso: ${peso} kg
+<b>${nombre}</b>
 `;
 
 let intentosPermitidos = 0;
@@ -564,7 +561,7 @@ function drawWall(x,y){
     ctx.fillRect(
 
         x*tileSize,
-        y*tileSize,
+        TOP_OFFSET + y*tileSize,
 
         tileSize,
         tileSize
@@ -599,7 +596,7 @@ function drawEmoji(
 
         x*tileSize + tileSize/2,
 
-        y*tileSize + tileSize/2
+        TOP_OFFSET + y*tileSize + tileSize/2
 
     );
 
@@ -928,7 +925,7 @@ document.getElementById(
 let joystickActive =
 false;
 
-const JOY_RADIUS = 45;
+const JOY_RADIUS = 55;
 
 joystickBase.addEventListener(
 
@@ -1027,10 +1024,22 @@ function updateJoystick(e){
     (32 + dy) + "px";
 
     touchDirection.x =
-    dx / JOY_RADIUS;
+Math.max(
+   -1,
+   Math.min(
+      1,
+      dx / (JOY_RADIUS*0.75)
+   )
+);
 
-    touchDirection.y =
-    dy / JOY_RADIUS;
+touchDirection.y =
+Math.max(
+   -1,
+   Math.min(
+      1,
+      dy / (JOY_RADIUS*0.75)
+   )
+);
 
 }
 
@@ -1949,36 +1958,30 @@ async function sendResult(){
 
     try{
 
+        const formData =
+        new URLSearchParams();
+
+        formData.append(
+            "nombre_alumno",
+            nombre
+        );
+
+        formData.append(
+            "nombre_reto",
+            "LABERINTO"
+        );
+
+        formData.append(
+            "puntos",
+            puntos
+        );
+
         await fetch(
-
             SCRIPT_URL,
-
             {
-
                 method:"POST",
-
-                headers:{
-
-                    "Content-Type":
-                    "application/json"
-
-                },
-
-                body:JSON.stringify({
-
-                    nombre_alumno:
-                    nombre,
-
-                    nombre_reto:
-                    "LABERINTO",
-
-                    puntos:
-                    puntos
-
-                })
-
+                body:formData
             }
-
         );
 
     }
