@@ -1597,10 +1597,66 @@ function moveNinjas(delta){
             );
 
             if(
-                path.length < 2
-            ){
-                return;
-            }
+    path.length < 2
+){
+
+    const dirs = [
+
+        [1,0],
+        [-1,0],
+        [0,1],
+        [0,-1]
+
+    ];
+
+    const posibles = [];
+
+    for(const d of dirs){
+
+        const nx =
+        startX + d[0];
+
+        const ny =
+        startY + d[1];
+
+        if(
+            !isBlockedForNinja(
+                nx,
+                ny
+            )
+        ){
+
+            posibles.push({
+                x:nx,
+                y:ny
+            });
+
+        }
+
+    }
+
+    if(
+        posibles.length > 0
+    ){
+
+        const randomMove =
+        posibles[
+            Math.floor(
+                Math.random() *
+                posibles.length
+            )
+        ];
+
+        ninja.x =
+        randomMove.x;
+
+        ninja.y =
+        randomMove.y;
+
+    }
+
+    return;
+}
 
             const next =
             path[1];
