@@ -425,17 +425,20 @@ function createCharacters(){
 
     sensei = {
 
-        x:1,
-        y:1,
+    x:1,
+    y:1,
 
-        dirX:0,
-        dirY:0,
+    currentDirX:0,
+    currentDirY:0,
 
-        speed:2.2,
+    nextDirX:0,
+    nextDirY:0,
 
-        emoji:"🥋"
+    speed:3.5,
 
-    };
+    emoji:"🥋"
+
+};
 
     ninjas = [
 
@@ -964,19 +967,15 @@ joystickBase.addEventListener(
 
     ()=>{
 
-        joystickActive =
-        false;
+    joystickActive = false;
 
-        touchDirection.x = 0;
-        touchDirection.y = 0;
+    joystickStick.style.left =
+    "32px";
 
-        joystickStick.style.left =
-        "32px";
+    joystickStick.style.top =
+    "32px";
 
-        joystickStick.style.top =
-        "32px";
-
-    }
+}
 
 );
 
@@ -1023,23 +1022,38 @@ function updateJoystick(e){
     joystickStick.style.top =
     (32 + dy) + "px";
 
-    touchDirection.x =
-Math.max(
-   -1,
-   Math.min(
-      1,
-      dx / (JOY_RADIUS*0.75)
-   )
-);
+    if(
+    Math.abs(dx) >
+    Math.abs(dy)
+){
 
-touchDirection.y =
-Math.max(
-   -1,
-   Math.min(
-      1,
-      dy / (JOY_RADIUS*0.75)
-   )
-);
+    sensei.nextDirY = 0;
+
+    if(dx > 0){
+
+        sensei.nextDirX = 1;
+
+    }else{
+
+        sensei.nextDirX = -1;
+
+    }
+
+}else{
+
+    sensei.nextDirX = 0;
+
+    if(dy > 0){
+
+        sensei.nextDirY = 1;
+
+    }else{
+
+        sensei.nextDirY = -1;
+
+    }
+
+}
 
 }
 
@@ -1075,56 +1089,92 @@ function isWalkable(
 
 function moveSensei(delta){
 
-    if(
-        !gameRunning
-    ) return;
+    if(!gameRunning){
+        return;
+    }
 
-    let moveX =
-    touchDirection.x *
-    sensei.speed *
-    delta;
+    const centerX =
+    Math.round(sensei.x);
 
-    let moveY =
-    touchDirection.y *
-    sensei.speed *
-    delta;
+    const centerY =
+    Math.round(sensei.y);
 
-    let nextX =
+    const nearCenter =
+
+        Math.abs(
+            sensei.x - centerX
+        ) < 0.15
+
+        &&
+
+        Math.abs(
+            sensei.y - centerY
+        ) < 0.15;
+
+    if(nearCenter){
+
+        const testX =
+        centerX +
+        sensei.nextDirX;
+
+        const testY =
+        centerY +
+        sensei.nextDirY;
+
+        if(
+            isWalkable(
+                testX,
+                testY
+            )
+        ){
+
+            sensei.currentDirX =
+            sensei.nextDirX;
+
+            sensei.currentDirY =
+            sensei.nextDirY;
+
+        }
+
+        sensei.x = centerX;
+        sensei.y = centerY;
+
+    }
+
+    const nextX =
     sensei.x +
-    moveX;
 
-    let nextY =
+    sensei.currentDirX *
+
+    sensei.speed *
+
+    delta;
+
+    const nextY =
     sensei.y +
-    moveY;
 
-    let cellX =
+    sensei.currentDirY *
+
+    sensei.speed *
+
+    delta;
+
+    const cellX =
     Math.round(nextX);
 
-    let cellY =
+    const cellY =
     Math.round(nextY);
 
     if(
         isWalkable(
             cellX,
-            Math.round(
-                sensei.y
-            )
-        )
-    ){
-        sensei.x =
-        nextX;
-    }
-
-    if(
-        isWalkable(
-            Math.round(
-                sensei.x
-            ),
             cellY
         )
     ){
-        sensei.y =
-        nextY;
+
+        sensei.x = nextX;
+        sensei.y = nextY;
+
     }
 
 }
