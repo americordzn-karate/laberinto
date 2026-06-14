@@ -1121,35 +1121,67 @@ if(
     sensei.y +
     moveY;
 
+    const margin = 0.25;
+
     let cellX =
 Math.round(nextX);
 
 let cellY =
 Math.round(nextY);
 
-    if(
-    isWalkable(
-        cellX,
-        Math.round(
-            sensei.y
-        )
-    )
-){
-        sensei.x =
-        nextX;
-    }
+    const leftCheck =
+Math.round(nextX - margin);
 
-    if(
+const rightCheck =
+Math.round(nextX + margin);
+
+const centerY =
+Math.round(sensei.y);
+
+if(
+
     isWalkable(
-        Math.round(
-            sensei.x
-        ),
-        cellY
+        leftCheck,
+        centerY
     )
+
+    &&
+
+    isWalkable(
+        rightCheck,
+        centerY
+    )
+
 ){
-        sensei.y =
-        nextY;
-    }
+    sensei.x = nextX;
+}
+
+    const topCheck =
+Math.round(nextY - margin);
+
+const bottomCheck =
+Math.round(nextY + margin);
+
+const centerX =
+Math.round(sensei.x);
+
+if(
+
+    isWalkable(
+        centerX,
+        topCheck
+    )
+
+    &&
+
+    isWalkable(
+        centerX,
+        bottomCheck
+    )
+
+){
+    sensei.y = nextY;
+}
 
  
 }
@@ -1370,9 +1402,31 @@ function isBlockedForNinja(x,y){
         return true;
     }
 
-    for(
-        const star of estrellasBloqueo
+    for(const star of estrellasBloqueo){
+
+    if(
+        star.x === x &&
+        star.y === y
     ){
+
+        const targetX =
+        Math.round(sensei.x);
+
+        const targetY =
+        Math.round(sensei.y);
+
+        if(
+            x === targetX &&
+            y === targetY
+        ){
+            return false;
+        }
+
+        return true;
+
+    }
+
+}{
 
         if(
             star.x === x &&
@@ -1593,6 +1647,15 @@ function moveNinjas(delta){
     Math.round(
         sensei.y
     );
+
+    if(
+    !isWalkable(
+        targetX,
+        targetY
+    )
+){
+    return;
+}
 
     ninjas.forEach(
 
