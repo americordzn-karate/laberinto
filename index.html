@@ -1210,12 +1210,34 @@ document
             sensei.y
         );
 
-        estrellasBloqueo.push({
+        const nuevaEstrella = {
 
-            x:gx,
-            y:gy
+    x:gx,
+    y:gy
 
-        });
+};
+
+estrellasBloqueo.push(
+    nuevaEstrella
+);
+
+setTimeout(()=>{
+
+    const index =
+    estrellasBloqueo.indexOf(
+        nuevaEstrella
+    );
+
+    if(index !== -1){
+
+        estrellasBloqueo.splice(
+            index,
+            1
+        );
+
+    }
+
+},5000);
 
         estrellasInventario--;
 
