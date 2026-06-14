@@ -1958,39 +1958,40 @@ async function sendResult(){
 
     try{
 
-        const formData =
-        new URLSearchParams();
-
-        formData.append(
-            "nombre_alumno",
-            nombre
-        );
-
-        formData.append(
-            "nombre_reto",
-            "LABERINTO"
-        );
-
-        formData.append(
-            "puntos",
-            puntos
-        );
-
-        await fetch(
+        const response = await fetch(
             SCRIPT_URL,
             {
                 method:"POST",
-                body:formData
+                headers:{
+                    "Content-Type":"application/json"
+                },
+                body:JSON.stringify({
+                    nombre_alumno:nombre,
+                    nombre_reto:"LABERINTO",
+                    puntos:puntos
+                })
             }
         );
 
-    }
-    catch(error){
+        const texto = await response.text();
 
+        console.log("RESPUESTA SCRIPT:");
+        console.log(texto);
+
+        return true;
+
+    }catch(error){
+
+        console.error("ERROR ENVIO:");
         console.error(error);
 
-    }
+        alert(
+            "Error enviando puntos:\n" +
+            error.message
+        );
 
+        return false;
+    }
 }
 
 
@@ -2024,18 +2025,12 @@ function regresarPortal(){
 
 async function sendResultAndExit(){
 
+    const ok =
     await sendResult();
 
-    setTimeout(
-
-        ()=>{
-
-            regresarPortal();
-
-        },
-
-        3500
-
+    console.log(
+        "ENVIO TERMINADO",
+        ok
     );
 
 }
