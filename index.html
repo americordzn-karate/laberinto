@@ -1954,44 +1954,35 @@ async function verificarIntentos(){
    ENVÍO DE RESULTADO
 ===================================================== */
 
-async function sendResult(){
+function sendResult(){
 
-    try{
+    const data = {
 
-        const response = await fetch(
-            SCRIPT_URL,
-            {
-                method:"POST",
-                headers:{
-                    "Content-Type":"application/json"
-                },
-                body:JSON.stringify({
-                    nombre_alumno:nombre,
-                    nombre_reto:"LABERINTO",
-                    puntos:puntos
-                })
-            }
-        );
+        nombre_alumno: nombre,
 
-        const texto = await response.text();
+        nombre_reto: "LABERINTO",
 
-        console.log("RESPUESTA SCRIPT:");
-        console.log(texto);
+        puntos: puntos
 
-        return true;
+    };
 
-    }catch(error){
+    fetch(
+        SCRIPT_URL,
+        {
+            method: "POST",
+            mode: "no-cors",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify(data)
+        }
+    ).catch(
+        err => console.log(
+            "Nota de red asíncrona:",
+            err
+        )
+    );
 
-        console.error("ERROR ENVIO:");
-        console.error(error);
-
-        alert(
-            "Error enviando puntos:\n" +
-            error.message
-        );
-
-        return false;
-    }
 }
 
 
@@ -2023,14 +2014,15 @@ function regresarPortal(){
    GUARDAR Y SALIR
 ===================================================== */
 
-async function sendResultAndExit(){
+function sendResultAndExit(){
 
-    const ok =
-    await sendResult();
+    sendResult();
 
-    console.log(
-        "ENVIO TERMINADO",
-        ok
+    setTimeout(
+        ()=>{
+            regresarPortal();
+        },
+        3500
     );
 
 }
