@@ -1079,7 +1079,26 @@ function isWalkable(
 ===================================================== */
 
 function moveSensei(delta){
+const currentCellX =
+Math.round(sensei.x);
 
+const currentCellY =
+Math.round(sensei.y);
+
+if(
+    !isWalkable(
+        currentCellX,
+        currentCellY
+    )
+){
+
+    sensei.x =
+    currentCellX;
+
+    sensei.y =
+    currentCellY;
+
+}
     if(
         !gameRunning
     ) return;
@@ -1103,27 +1122,31 @@ function moveSensei(delta){
     moveY;
 
     let cellX =
-Math.floor(nextX + 0.3);
+Math.round(nextX);
 
 let cellY =
-Math.floor(nextY + 0.3);
+Math.round(nextY);
 
     if(
-        isWalkable(
-            cellX,
-            Math.floor(sensei.y + 0.3)
+    isWalkable(
+        cellX,
+        Math.round(
+            sensei.y
         )
-    ){
+    )
+){
         sensei.x =
         nextX;
     }
 
     if(
-        isWalkable(
-            Math.floor(sensei.x + 0.3),
-            cellY
-        )
-    ){
+    isWalkable(
+        Math.round(
+            sensei.x
+        ),
+        cellY
+    )
+){
         sensei.y =
         nextY;
     }
