@@ -120,7 +120,7 @@ button{
 
 #controles{
     position:absolute;
-    bottom:140px;
+    bottom:20px;
     left:20px;
     z-index:30;
 }
@@ -132,6 +132,7 @@ button{
     background:rgba(255,255,255,.15);
     border:3px solid rgba(255,255,255,.25);
     position:relative;
+    touch-action:none;
 }
 
 #joystickStick{
@@ -142,11 +143,12 @@ button{
     position:absolute;
     left:32px;
     top:32px;
+    pointer-events:none;
 }
 
 #acciones{
     position:absolute;
-    bottom:170px;
+    bottom:40px;
     right:20px;
     z-index:30;
 }
@@ -171,6 +173,14 @@ button{
 #mensajePuntos{
     font-size:34px;
     color:#FFD700;
+}
+
+/* [FIX #7] Botón de volver visible en pantalla final */
+#btnVolver{
+    background:#2ecc71;
+    color:white;
+    margin-top:10px;
+    display:none;
 }
 
 </style>
@@ -215,8 +225,8 @@ button{
         </div>
 
         <div class="hudBox">
-            <div class="hudLabel">PUNTOS</div>
-            <div class="hudValue" id="hudPuntos">0</div>
+            <div class="hudLabel">INTENTOS</div>
+            <div class="hudValue" id="hudIntentos">-</div>
         </div>
 
     </div>
@@ -247,6 +257,9 @@ button{
 
     <div id="mensajePuntos"></div>
 
+    <!-- [FIX #7] Botón explícito de retorno al portal -->
+    <button id="btnVolver">VOLVER AL PORTAL</button>
+
 </div>
 
 <script>
@@ -258,114 +271,100 @@ const PORTAL_URL =
 "https://americordzn-karate.github.io/retos/";
 
 const GRID_SIZE = 21;
-
 const GAME_DURATION = 60;
-const TOP_OFFSET = 70;
-let nombre = "";
-let edad = "";
-let reto = "";
+
+/*
+ * TOP_OFFSET dinámico: se calcula en resizeCanvas()
+ * para que el laberinto quede centrado verticalmente
+ * debajo del HUD, sin recortar la última fila. [FIX #10]
+ */
+let TOP_OFFSET = 70;
+
+let nombre   = "";
+let edad     = "";
+let reto     = "";
 let estatura = "";
-let peso = "";
+let peso     = "";
 
-const params =
-new URLSearchParams(window.location.search);
+const params = new URLSearchParams(window.location.search);
 
-nombre =
-params.get("nombre") || "";
+nombre   = params.get("nombre")   || "";
+edad     = params.get("edad")     || "";
+reto     = params.get("reto")     || "LABERINTO";
+estatura = params.get("estatura") || "";
+peso     = params.get("peso")     || "";
 
-edad =
-params.get("edad") || "";
-
-reto =
-params.get("reto") || "LABERINTO";
-
-estatura =
-params.get("estatura") || "";
-
-peso =
-params.get("peso") || "";
-
-document.getElementById("datosJugador").innerHTML =
-`
-<b>${nombre}</b>
-`;
+document.getElementById("datosJugador").innerHTML = `<b>${nombre}</b>`;
 
 let intentosPermitidos = 0;
 let intentosRealizados = 0;
 
-let canvas =
-document.getElementById("canvas");
-
-let ctx =
-canvas.getContext("2d");
+let canvas = document.getElementById("canvas");
+let ctx    = canvas.getContext("2d");
 
 let tileSize = 0;
 
-let gameRunning = false;
-
+let gameRunning  = false;
 let gameStartTime = 0;
-
 let remainingTime = GAME_DURATION;
-
 let puntos = 0;
 
 let estrellasInventario = 0;
-
-let stopDisponible = true;
-
-let stopActivo = false;
-
+let stopActivo   = false;
 let stopAparecio = false;
 
-let ninjaSpeedMultiplier = 1;
+/* [FIX #3] Variable local al juego, no global en window */
+let stopSpawnTime = 0;
 
+let ninjaSpeedMultiplier = 1;
 let animationFrame;
 
-let touchDirection = {
-    x:0,
-    y:0
-};
-
-let maze = [];
-
-let estrellasMapa = [];
-
+let maze            = [];
+let estrellasMapa   = [];
 let estrellasBloqueo = [];
+let stopItem        = null;
+let sensei          = null;
+let ninjas          = [];
 
-let stopItem = null;
+/* =====================================================
+   RESIZE — [FIX #10] TOP_OFFSET dinámico
+===================================================== */
 
-let sensei = null;
-
-let ninjas = [];
-
-window.addEventListener(
-    "resize",
-    resizeCanvas
-);
+window.addEventListener("resize", resizeCanvas);
 
 function resizeCanvas(){
 
-    canvas.width =
-    window.innerWidth;
+    canvas.width  = window.innerWidth;
+    canvas.height = window.innerHeight;
 
-    canvas.height =
-    window.innerHeight;
+    /*
+     * El HUD ocupa ~60px. Se calcula el tileSize máximo
+     * que permita dibujar las 21 filas sin salirse del canvas.
+     */
+    const hudH    = 60;
+    const maxW    = Math.floor(canvas.width  / GRID_SIZE);
+    const maxH    = Math.floor((canvas.height - hudH) / GRID_SIZE);
+    tileSize      = Math.min(maxW, maxH);
 
-    tileSize =
-    Math.min(
-        canvas.width,
-        canvas.height
-    ) / GRID_SIZE;
+    /* Centrar el mapa horizontalmente y dejar el HUD arriba */
+    const mapaW   = tileSize * GRID_SIZE;
+    const mapaH   = tileSize * GRID_SIZE;
+    TOP_OFFSET    = hudH + Math.floor((canvas.height - hudH - mapaH) / 2);
+    LEFT_OFFSET   = Math.floor((canvas.width - mapaW) / 2);
+
 }
 
+/* LEFT_OFFSET también dinámico */
+let LEFT_OFFSET = 0;
+
 resizeCanvas();
+
 
 /* =====================================================
    LABERINTO 21x21
 ===================================================== */
 
 const MAZE_TEMPLATE = [
-
 "111111111111111111111",
 "100000000010000000001",
 "101111111010111111101",
@@ -387,7 +386,6 @@ const MAZE_TEMPLATE = [
 "101111111011111111101",
 "100000000000000000001",
 "111111111111111111111"
-
 ];
 
 
@@ -396,24 +394,13 @@ const MAZE_TEMPLATE = [
 ===================================================== */
 
 function createMaze(){
-
     maze = [];
-
     for(let y=0;y<GRID_SIZE;y++){
-
         maze[y] = [];
-
         for(let x=0;x<GRID_SIZE;x++){
-
-            maze[y][x] =
-            parseInt(
-                MAZE_TEMPLATE[y][x]
-            );
-
+            maze[y][x] = parseInt(MAZE_TEMPLATE[y][x]);
         }
-
     }
-
 }
 
 
@@ -424,80 +411,72 @@ function createMaze(){
 function createCharacters(){
 
     sensei = {
-
-    x:1,
-    y:1,
-
-    dirX:0,
-    dirY:0,
-
-    speed:2.2,
-
-    emoji:"🥋"
-
-};
+        x:1,
+        y:1,
+        /*
+         * [NUEVO] Dirección actual de movimiento continuo
+         * (estilo Pac-Man). El sensei siempre avanza en
+         * esta dirección hasta topar con un muro.
+         * Se cambia únicamente cuando el joystick indica
+         * una nueva dirección VÁLIDA.
+         */
+        dirX: 1,   /* arranca moviéndose a la derecha */
+        dirY: 0,
+        /*
+         * [NUEVO] Dirección solicitada por el jugador
+         * (se aplica en cuanto haya pasillo disponible).
+         */
+        pendingDirX: 1,
+        pendingDirY: 0,
+        speed: 5.5,   /* celdas/segundo */
+        emoji:"🥋"
+    };
 
     ninjas = [
-
-        {
-            x:19,
-            y:1,
-            speed:2.0,
-            emoji:"🥷"
-        },
-
-        {
-            x:1,
-            y:19,
-            speed:2.0,
-            emoji:"🥷"
-        },
-
-        {
-            x:19,
-            y:19,
-            speed:2.0,
-            emoji:"🥷"
-        }
-
+        { x:19, y:1,  speed:5.0, emoji:"🥷" },
+        { x:1,  y:19, speed:5.0, emoji:"🥷" },
+        { x:19, y:19, speed:5.0, emoji:"🥷" }
     ];
 
 }
 
 
 /* =====================================================
-   CASILLAS LIBRES
+   CASILLAS LIBRES — [FIX #5] sin solapamiento
 ===================================================== */
 
-function getRandomFreeCell(){
+function getRandomFreeCell(excluidas){
 
-    while(true){
+    excluidas = excluidas || [];
 
-        let x =
-        Math.floor(
-            Math.random()*GRID_SIZE
-        );
+    let intentos = 0;
 
-        let y =
-        Math.floor(
-            Math.random()*GRID_SIZE
-        );
+    while(intentos < 500){
 
-        if(maze[y][x] !== 0)
-            continue;
+        intentos++;
 
+        let x = Math.floor(Math.random()*GRID_SIZE);
+        let y = Math.floor(Math.random()*GRID_SIZE);
+
+        if(maze[y][x] !== 0) continue;
+
+        /* Esquinas reservadas para personajes */
         if(
-            (x===1 && y===1) ||
-            (x===19 && y===1) ||
-            (x===1 && y===19) ||
+            (x===1  && y===1)  ||
+            (x===19 && y===1)  ||
+            (x===1  && y===19) ||
             (x===19 && y===19)
-        ){
-            continue;
-        }
+        ) continue;
+
+        /* [FIX #5] No coincidir con celdas ya asignadas */
+        if(excluidas.some(c => c.x===x && c.y===y)) continue;
 
         return {x,y};
 
     }
+
+    /* Fallback de seguridad */
+    return {x:5, y:5};
 
 }
 
@@ -509,19 +488,13 @@ function getRandomFreeCell(){
 function generateStars(){
 
     estrellasMapa = [];
+    const usadas  = [];
 
     for(let i=0;i<4;i++){
 
-        let pos =
-        getRandomFreeCell();
-
-        estrellasMapa.push({
-
-            x:pos.x,
-            y:pos.y,
-            active:true
-
-        });
+        let pos = getRandomFreeCell(usadas);
+        estrellasMapa.push({ x:pos.x, y:pos.y, active:true });
+        usadas.push(pos);
 
     }
 
@@ -534,512 +507,13 @@ function generateStars(){
 
 function createStopItem(){
 
-    let pos =
-    getRandomFreeCell();
+    const usadas = estrellasMapa
+        .filter(s => s.active)
+        .concat(estrellasBloqueo);
 
-    stopItem = {
+    let pos = getRandomFreeCell(usadas);
 
-        x:pos.x,
-        y:pos.y,
-
-        active:true
-
-    };
-
-}
-
-
-/* =====================================================
-   DIBUJAR MURO
-===================================================== */
-
-function drawWall(x,y){
-
-    ctx.fillStyle =
-    "#1E4DFF";
-
-    ctx.fillRect(
-
-        x*tileSize,
-        TOP_OFFSET + y*tileSize,
-
-        tileSize,
-        tileSize
-
-    );
-
-}
-
-
-/* =====================================================
-   DIBUJAR EMOJI
-===================================================== */
-
-function drawEmoji(
-    emoji,
-    x,
-    y
-){
-
-    ctx.font =
-    `${tileSize*0.8}px Arial`;
-
-    ctx.textAlign =
-    "center";
-
-    ctx.textBaseline =
-    "middle";
-
-    ctx.fillText(
-
-        emoji,
-
-        x*tileSize + tileSize/2,
-
-        TOP_OFFSET + y*tileSize + tileSize/2
-
-    );
-
-}
-
-
-/* =====================================================
-   DIBUJAR ESTRELLAS
-===================================================== */
-
-function drawStars(){
-
-    estrellasMapa.forEach(star=>{
-
-        if(!star.active)
-            return;
-
-        drawEmoji(
-            "⭐",
-            star.x,
-            star.y
-        );
-
-    });
-
-}
-
-
-/* =====================================================
-   DIBUJAR BLOQUEOS
-===================================================== */
-
-function drawPlacedStars(){
-
-    estrellasBloqueo.forEach(star=>{
-
-        drawEmoji(
-            "⭐",
-            star.x,
-            star.y
-        );
-
-    });
-
-}
-
-
-/* =====================================================
-   DIBUJAR STOP
-===================================================== */
-
-function drawStop(){
-
-    if(
-        !stopItem ||
-        !stopItem.active
-    ){
-        return;
-    }
-
-    drawEmoji(
-        "🛑",
-        stopItem.x,
-        stopItem.y
-    );
-
-}
-
-
-/* =====================================================
-   DIBUJAR LABERINTO
-===================================================== */
-
-function drawMaze(){
-
-    ctx.clearRect(
-        0,
-        0,
-        canvas.width,
-        canvas.height
-    );
-
-    for(
-        let y=0;
-        y<GRID_SIZE;
-        y++
-    ){
-
-        for(
-            let x=0;
-            x<GRID_SIZE;
-            x++
-        ){
-
-            if(
-                maze[y][x] === 1
-            ){
-
-                drawWall(x,y);
-
-            }
-
-        }
-
-    }
-
-}
-
-
-/* =====================================================
-   RENDER COMPLETO
-===================================================== */
-
-function render(){
-
-    drawMaze();
-
-    drawStars();
-
-    drawPlacedStars();
-
-    drawStop();
-
-    drawEmoji(
-        sensei.emoji,
-        sensei.x,
-        sensei.y
-    );
-
-    ninjas.forEach(ninja=>{
-
-        drawEmoji(
-            ninja.emoji,
-            ninja.x,
-            ninja.y
-        );
-
-    });
-
-}
-
-
-/* =====================================================
-   APARICIÓN DEL STOP
-===================================================== */
-
-function updateStopSpawn(){
-
-    if(stopAparecio)
-        return;
-
-    let elapsed =
-    (
-        Date.now()
-        -
-        gameStartTime
-    )/1000;
-
-    if(
-    !window.stopSpawnTime
-){
-    window.stopSpawnTime =
-    10 + Math.random()*10;
-}
-
-if(
-    elapsed >=
-    window.stopSpawnTime
-){
-
-        createStopItem();
-
-        stopAparecio =
-        true;
-
-    }
-
-}
-
-
-/* =====================================================
-   INICIALIZACIÓN
-===================================================== */
-
-createMaze();
-
-createCharacters();
-
-generateStars();
-
-render();
-
-/* =====================================================
-   AUDIO
-===================================================== */
-
-const audioCtx =
-new (
-    window.AudioContext ||
-    window.webkitAudioContext
-)();
-
-function playTone(
-    freq,
-    duration,
-    type="sine"
-){
-
-    const osc =
-    audioCtx.createOscillator();
-
-    const gain =
-    audioCtx.createGain();
-
-    osc.type = type;
-
-    osc.frequency.value =
-    freq;
-
-    osc.connect(gain);
-
-    gain.connect(
-        audioCtx.destination
-    );
-
-    gain.gain.value = 0.15;
-
-    osc.start();
-
-    gain.gain.exponentialRampToValueAtTime(
-        0.0001,
-        audioCtx.currentTime +
-        duration
-    );
-
-    osc.stop(
-        audioCtx.currentTime +
-        duration
-    );
-
-}
-
-function soundCollectStar(){
-
-    playTone(
-        900,
-        0.12,
-        "triangle"
-    );
-
-    setTimeout(()=>{
-
-        playTone(
-            1200,
-            0.12,
-            "triangle"
-        );
-
-    },60);
-
-}
-
-function soundPlaceStar(){
-
-    playTone(
-        400,
-        0.18,
-        "square"
-    );
-
-}
-
-function soundStop(){
-
-    playTone(
-        250,
-        0.25,
-        "sawtooth"
-    );
-
-    setTimeout(()=>{
-
-        playTone(
-            500,
-            0.25,
-            "sawtooth"
-        );
-
-    },100);
-
-}
-
-function soundWin(){
-
-    playTone(600,.15);
-    setTimeout(()=>playTone(800,.15),150);
-    setTimeout(()=>playTone(1000,.25),300);
-
-}
-
-function soundLose(){
-
-    playTone(
-        250,
-        .45,
-        "square"
-    );
-
-}
-
-
-/* =====================================================
-   JOYSTICK
-===================================================== */
-
-const joystickBase =
-document.getElementById(
-    "joystickBase"
-);
-
-const joystickStick =
-document.getElementById(
-    "joystickStick"
-);
-
-let joystickActive =
-false;
-
-const JOY_RADIUS = 55;
-
-joystickBase.addEventListener(
-
-    "touchstart",
-
-    e=>{
-
-        joystickActive =
-        true;
-
-        updateJoystick(e);
-
-    }
-
-);
-
-joystickBase.addEventListener(
-
-    "touchmove",
-
-    e=>{
-
-        if(
-            !joystickActive
-        ) return;
-
-        updateJoystick(e);
-
-    }
-
-);
-
-joystickBase.addEventListener(
-
-    "touchend",
-
-    ()=>{
-
-        joystickActive =
-        false;
-
-        touchDirection.x = 0;
-        touchDirection.y = 0;
-
-        joystickStick.style.left =
-        "32px";
-
-        joystickStick.style.top =
-        "32px";
-
-    }
-
-);
-
-function updateJoystick(e){
-
-    const rect =
-    joystickBase.getBoundingClientRect();
-
-    const touch =
-    e.touches[0];
-
-    let dx =
-    touch.clientX -
-    (rect.left + 60);
-
-    let dy =
-    touch.clientY -
-    (rect.top + 60);
-
-    const distance =
-    Math.sqrt(
-        dx*dx +
-        dy*dy
-    );
-
-    if(
-        distance >
-        JOY_RADIUS
-    ){
-
-        dx =
-        dx / distance *
-        JOY_RADIUS;
-
-        dy =
-        dy / distance *
-        JOY_RADIUS;
-
-    }
-
-    joystickStick.style.left =
-    (32 + dx) + "px";
-
-    joystickStick.style.top =
-    (32 + dy) + "px";
-
-    touchDirection.x =
-    Math.max(
-        -1,
-        Math.min(
-            1,
-            dx / (JOY_RADIUS * 0.75)
-        )
-    );
-
-    touchDirection.y =
-    Math.max(
-        -1,
-        Math.min(
-            1,
-            dy / (JOY_RADIUS * 0.75)
-        )
-    );
+    stopItem = { x:pos.x, y:pos.y, active:true };
 
 }
 
@@ -1048,142 +522,82 @@ function updateJoystick(e){
    VALIDACIÓN DE MOVIMIENTO
 ===================================================== */
 
-function isWalkable(
-    x,
-    y
-){
+function isWalkable(x, y){
+    if(x<0 || y<0 || x>=GRID_SIZE || y>=GRID_SIZE) return false;
+    return maze[y][x] === 0;
+}
 
-    if(
-        x < 0 ||
-        y < 0 ||
-        x >= GRID_SIZE ||
-        y >= GRID_SIZE
-    ){
-        return false;
+function isBlockedForNinja(x, y){
+    if(x<0 || y<0 || x>=GRID_SIZE || y>=GRID_SIZE) return true;
+    if(maze[y][x] === 1) return true;
+    for(const star of estrellasBloqueo){
+        if(star.x===x && star.y===y) return true;
     }
-
-    return (
-        maze[y][x] === 0
-    );
-
+    return false;
 }
 
 
 /* =====================================================
-   MOVIMIENTO SENSEI
+   MOVIMIENTO SENSEI — Estilo Pac-Man [NUEVO]
+   ─────────────────────────────────────────────────
+   • El sensei se mueve en coordenadas flotantes.
+   • La posición siempre avanza en la dirección actual
+     hasta que la CELDA DESTINO sea un muro.
+   • Cuando llega al centro de una celda (snap), intenta
+     aplicar la dirección pendiente. Si no es posible,
+     mantiene la dirección actual. Si ambas chocan, para.
+   • Las colisiones se comprueban contra celdas enteras
+     usando Math.round(), garantizando que el sensei
+     jamás penetre una pared. [FIX colisión muros]
 ===================================================== */
 
 function moveSensei(delta){
 
-    if(
-        !gameRunning
-    ) return;
+    if(!gameRunning) return;
 
-    let moveX =
-    touchDirection.x *
-    sensei.speed *
-    delta;
+    /*
+     * Umbral de "snap": si el sensei está a menos de
+     * SNAP_DIST del centro de una celda, lo alineamos
+     * y evaluamos la dirección pendiente.
+     */
+    const SNAP_DIST = sensei.speed * delta * 1.1;
 
-    let moveY =
-    touchDirection.y *
-    sensei.speed *
-    delta;
+    const cx = Math.round(sensei.x);
+    const cy = Math.round(sensei.y);
 
-    let nextX =
-    sensei.x +
-    moveX;
+    const distToCenterX = Math.abs(sensei.x - cx);
+    const distToCenterY = Math.abs(sensei.y - cy);
+    const enCentro = distToCenterX < SNAP_DIST && distToCenterY < SNAP_DIST;
 
-    let nextY =
-    sensei.y +
-    moveY;
+    if(enCentro){
 
-    let cellX =
-    Math.round(nextX);
-
-    let cellY =
-    Math.round(nextY);
-
-    const y1 =
-Math.round(
-    sensei.y - 0.25
-);
-
-const y2 =
-Math.round(
-    sensei.y + 0.25
-);
-
-if(
-
-    isWalkable(
-        cellX,
-        y1
-    )
-
-    &&
-
-    isWalkable(
-        cellX,
-        y2
-    )
-
-){
-    sensei.x =
-    nextX;
-}
-
-    const x1 =
-Math.round(
-    sensei.x - 0.25
-);
-
-const x2 =
-Math.round(
-    sensei.x + 0.25
-);
-
-if(
-
-    isWalkable(
-        x1,
-        cellY
-    )
-
-    &&
-
-    isWalkable(
-        x2,
-        cellY
-    )
-
-){
-    sensei.y =
-    nextY;
-}
-
-    /* CENTRADO AUTOMÁTICO */
-
-    const cx =
-    Math.round(sensei.x);
-
-    const cy =
-    Math.round(sensei.y);
-
-    if(
-        Math.abs(
-            sensei.x - cx
-        ) < 0.08
-    ){
+        /* Alinear exactamente al centro de la celda */
         sensei.x = cx;
+        sensei.y = cy;
+
+        /* Intentar aplicar dirección pendiente */
+        const pdx = sensei.pendingDirX;
+        const pdy = sensei.pendingDirY;
+
+        if((pdx !== 0 || pdy !== 0) && isWalkable(cx + pdx, cy + pdy)){
+            sensei.dirX = pdx;
+            sensei.dirY = pdy;
+        }
+
+        /* ¿Puede continuar en la dirección actual? */
+        const nextX = cx + sensei.dirX;
+        const nextY = cy + sensei.dirY;
+
+        if(!isWalkable(nextX, nextY)){
+            /* Choca con muro: se detiene. No avanza. */
+            return;
+        }
+
     }
 
-    if(
-        Math.abs(
-            sensei.y - cy
-        ) < 0.08
-    ){
-        sensei.y = cy;
-    }
+    /* Avanzar en la dirección actual */
+    sensei.x += sensei.dirX * sensei.speed * delta;
+    sensei.y += sensei.dirY * sensei.speed * delta;
 
 }
 
@@ -1194,123 +608,27 @@ if(
 
 function checkStarCollection(){
 
-    estrellasMapa.forEach(
+    estrellasMapa.forEach(star => {
 
-        star=>{
+        if(!star.active) return;
 
-            if(
-                !star.active
-            ) return;
+        const dist = Math.hypot(star.x - sensei.x, star.y - sensei.y);
 
-            const dist =
-            Math.hypot(
+        if(dist < 0.5){
 
-                star.x -
-                sensei.x,
+            star.active = false;
+            estrellasInventario++;
 
-                star.y -
-                sensei.y
-
-            );
-
-            if(
-                dist < 0.5
-            ){
-
-                star.active =
-                false;
-
-                estrellasInventario++;
-
-                document
-                .getElementById(
-                    "hudEstrellas"
-                )
-                .textContent =
+            document.getElementById("hudEstrellas").textContent =
                 estrellasInventario;
 
-                soundCollectStar();
-
-            }
+            soundCollectStar();
 
         }
 
-    );
+    });
 
 }
-
-
-/* =====================================================
-   SOLTAR ESTRELLA
-===================================================== */
-
-document
-.getElementById(
-    "btnSoltar"
-)
-.addEventListener(
-
-    "click",
-
-    ()=>{
-
-        if(
-            estrellasInventario <= 0
-        ) return;
-
-        const gx =
-        Math.round(
-            sensei.x
-        );
-
-        const gy =
-        Math.round(
-            sensei.y
-        );
-
-        const nuevaEstrella = {
-
-    x:gx,
-    y:gy
-
-};
-
-estrellasBloqueo.push(
-    nuevaEstrella
-);
-
-setTimeout(()=>{
-
-    const index =
-    estrellasBloqueo.indexOf(
-        nuevaEstrella
-    );
-
-    if(index !== -1){
-
-        estrellasBloqueo.splice(
-            index,
-            1
-        );
-
-    }
-
-},5000);
-
-        estrellasInventario--;
-
-        document
-        .getElementById(
-            "hudEstrellas"
-        )
-        .textContent =
-        estrellasInventario;
-
-        soundPlaceStar();
-
-    }
-
-);
 
 
 /* =====================================================
@@ -1319,47 +637,21 @@ setTimeout(()=>{
 
 function checkStopPickup(){
 
-    if(
-        !stopItem ||
-        !stopItem.active
-    ){
-        return;
-    }
+    if(!stopItem || !stopItem.active) return;
 
-    const dist =
-    Math.hypot(
+    const dist = Math.hypot(stopItem.x - sensei.x, stopItem.y - sensei.y);
 
-        stopItem.x -
-        sensei.x,
+    if(dist > 0.5) return;
 
-        stopItem.y -
-        sensei.y
-
-    );
-
-    if(
-        dist > 0.5
-    ){
-        return;
-    }
-
-    stopItem.active =
-    false;
-
-    stopActivo =
-    true;
+    stopItem.active = false;
+    stopActivo      = true;
 
     soundStop();
 
-    setTimeout(()=>{
-
-        stopActivo =
-        false;
-
-        ninjaSpeedMultiplier *=
-        1.2;
-
-    },5000);
+    setTimeout(() => {
+        stopActivo           = false;
+        ninjaSpeedMultiplier *= 1.2;
+    }, 5000);
 
 }
 
@@ -1368,245 +660,92 @@ function checkStopPickup(){
    ACTUALIZACIÓN SENSEI
 ===================================================== */
 
-function updateSensei(
-    delta
-){
-
-    moveSensei(
-        delta
-    );
-
+function updateSensei(delta){
+    moveSensei(delta);
     checkStarCollection();
-
     checkStopPickup();
-
 }
+
 
 /* =====================================================
-   NODOS VÁLIDOS
+   APARICIÓN DEL STOP — [FIX #3] variable local
 ===================================================== */
 
-function isBlockedForNinja(x,y){
+function updateStopSpawn(){
 
-    if(
-        x < 0 ||
-        y < 0 ||
-        x >= GRID_SIZE ||
-        y >= GRID_SIZE
-    ){
-        return true;
+    if(stopAparecio) return;
+
+    const elapsed = (Date.now() - gameStartTime) / 1000;
+
+    /* stopSpawnTime es variable local del juego, no window.x */
+    if(elapsed >= stopSpawnTime){
+        createStopItem();
+        stopAparecio = true;
     }
-
-    if(
-        maze[y][x] === 1
-    ){
-        return true;
-    }
-
-    const targetX =
-    Math.round(sensei.x);
-
-    const targetY =
-    Math.round(sensei.y);
-
-    for(
-        const star of estrellasBloqueo
-    ){
-
-        if(
-            star.x === x &&
-            star.y === y
-        ){
-
-            if(
-                x === targetX &&
-                y === targetY
-            ){
-                return false;
-            }
-
-            return true;
-        }
-
-    }
-
-    return false;
 
 }
+
 
 /* =====================================================
    A*
 ===================================================== */
 
 function heuristic(ax,ay,bx,by){
-
-    return (
-        Math.abs(ax-bx) +
-        Math.abs(ay-by)
-    );
-
+    return Math.abs(ax-bx) + Math.abs(ay-by);
 }
 
 function nodeKey(x,y){
-
     return `${x}_${y}`;
-
 }
 
 function getPath(startX,startY,endX,endY){
 
-    const open = [];
-
+    const open   = [];
     const closed = new Set();
 
     open.push({
-
-        x:startX,
-        y:startY,
-
+        x:startX, y:startY,
         g:0,
-
-        h:heuristic(
-            startX,
-            startY,
-            endX,
-            endY
-        ),
-
+        h:heuristic(startX,startY,endX,endY),
         parent:null
-
     });
 
-    while(
-        open.length > 0
-    ){
+    while(open.length > 0){
 
-        open.sort(
-            (a,b)=>
-            (a.g+a.h) -
-            (b.g+b.h)
-        );
+        open.sort((a,b) => (a.g+a.h)-(b.g+b.h));
 
-        const current =
-        open.shift();
+        const current = open.shift();
 
-        if(
-            current.x === endX &&
-            current.y === endY
-        ){
-
-            const path=[];
-
-            let n=current;
-
-            while(n){
-
-                path.unshift({
-
-                    x:n.x,
-                    y:n.y
-
-                });
-
-                n=n.parent;
-
-            }
-
+        if(current.x===endX && current.y===endY){
+            const path = [];
+            let n = current;
+            while(n){ path.unshift({x:n.x,y:n.y}); n=n.parent; }
             return path;
-
         }
 
-        closed.add(
-            nodeKey(
-                current.x,
-                current.y
-            )
-        );
+        closed.add(nodeKey(current.x,current.y));
 
-        const dirs = [
+        const dirs = [[1,0],[-1,0],[0,1],[0,-1]];
 
-            [1,0],
-            [-1,0],
-            [0,1],
-            [0,-1]
+        for(const d of dirs){
 
-        ];
+            const nx = current.x + d[0];
+            const ny = current.y + d[1];
 
-        for(
-            const d of dirs
-        ){
+            if(isBlockedForNinja(nx,ny)) continue;
 
-            const nx =
-            current.x + d[0];
+            const key = nodeKey(nx,ny);
+            if(closed.has(key)) continue;
 
-            const ny =
-            current.y + d[1];
+            const g = current.g + 1;
+            const h = heuristic(nx,ny,endX,endY);
 
-            if(
-                isBlockedForNinja(
-                    nx,
-                    ny
-                )
-            ){
-                continue;
-            }
+            const existing = open.find(n => n.x===nx && n.y===ny);
 
-            const key =
-            nodeKey(nx,ny);
-
-            if(
-                closed.has(key)
-            ){
-                continue;
-            }
-
-            const g =
-            current.g + 1;
-
-            const h =
-            heuristic(
-                nx,
-                ny,
-                endX,
-                endY
-            );
-
-            const existing =
-            open.find(
-                n=>
-                n.x===nx &&
-                n.y===ny
-            );
-
-            if(
-                existing
-            ){
-
-                if(
-                    g < existing.g
-                ){
-
-                    existing.g =
-                    g;
-
-                    existing.parent =
-                    current;
-
-                }
-
-            }
-            else{
-
-                open.push({
-
-                    x:nx,
-                    y:ny,
-                    g,
-                    h,
-                    parent:current
-
-                });
-
+            if(existing){
+                if(g < existing.g){ existing.g=g; existing.parent=current; }
+            } else {
+                open.push({x:nx,y:ny,g,h,parent:current});
             }
 
         }
@@ -1624,101 +763,31 @@ function getPath(startX,startY,endX,endY){
 
 function moveNinjas(delta){
 
-    if(
-        stopActivo
-    ){
-        return;
-    }
+    if(stopActivo) return;
 
-    const targetX =
-    Math.round(
-        sensei.x
-    );
+    const targetX = Math.round(sensei.x);
+    const targetY = Math.round(sensei.y);
 
-    const targetY =
-    Math.round(
-        sensei.y
-    );
+    ninjas.forEach(ninja => {
 
-    ninjas.forEach(
+        const startX = Math.round(ninja.x);
+        const startY = Math.round(ninja.y);
 
-        ninja=>{
+        const path = getPath(startX,startY,targetX,targetY);
 
-            const startX =
-            Math.round(
-                ninja.x
-            );
+        if(path.length < 2) return;
 
-            const startY =
-            Math.round(
-                ninja.y
-            );
+        const next = path[1];
 
-            const path =
-            getPath(
+        const dx = next.x - ninja.x;
+        const dy = next.y - ninja.y;
 
-                startX,
-                startY,
+        const speed = ninja.speed * ninjaSpeedMultiplier;
 
-                targetX,
-                targetY
+        ninja.x += dx * speed * delta;
+        ninja.y += dy * speed * delta;
 
-            );
-
-            if(
-    path.length < 2
-){
-
-    const dist =
-    Math.hypot(
-
-        ninja.x -
-        sensei.x,
-
-        ninja.y -
-        sensei.y
-
-    );
-
-    if(
-        dist < 0.8
-    ){
-
-        loseGame();
-
-    }
-
-    return;
-}
-
-            const next =
-            path[1];
-
-            const dx =
-            next.x -
-            ninja.x;
-
-            const dy =
-            next.y -
-            ninja.y;
-
-            const speed =
-            ninja.speed *
-            ninjaSpeedMultiplier;
-
-            ninja.x +=
-            dx *
-            speed *
-            delta;
-
-            ninja.y +=
-            dy *
-            speed *
-            delta;
-
-        }
-
-    );
+    });
 
 }
 
@@ -1729,29 +798,13 @@ function moveNinjas(delta){
 
 function checkCapture(){
 
-    for(
-        const ninja of ninjas
-    ){
+    for(const ninja of ninjas){
 
-        const dist =
-        Math.hypot(
+        const dist = Math.hypot(ninja.x - sensei.x, ninja.y - sensei.y);
 
-            ninja.x -
-            sensei.x,
-
-            ninja.y -
-            sensei.y
-
-        );
-
-        if(
-            dist < 0.55
-        ){
-
+        if(dist < 0.55){
             loseGame();
-
             return;
-
         }
 
     }
@@ -1765,139 +818,108 @@ function checkCapture(){
 
 function updateTimer(){
 
-    if(
-        !gameRunning
-    ){
-        return;
-    }
+    if(!gameRunning) return;
 
-    const elapsed =
-    (
-        Date.now() -
-        gameStartTime
-    ) / 1000;
+    const elapsed = (Date.now() - gameStartTime) / 1000;
 
-    remainingTime =
-    Math.max(
-        0,
-        GAME_DURATION -
-        Math.floor(elapsed)
-    );
+    remainingTime = Math.max(0, GAME_DURATION - Math.floor(elapsed));
 
-    document
-    .getElementById(
-        "hudTiempo"
-    )
-    .textContent =
-    remainingTime;
+    document.getElementById("hudTiempo").textContent = remainingTime;
 
-    if(
-        elapsed >=
-        GAME_DURATION
-    ){
-
+    if(elapsed >= GAME_DURATION){
         winGame();
-
     }
 
 }
 
 
 /* =====================================================
-   FIN DE PARTIDA
+   DIBUJAR MURO
 ===================================================== */
 
-let gameEnded =
-false;
-
-function showFinalScreen(
-    title,
-    pts
-){
-
-    const panel =
-    document.getElementById(
-        "mensajeFinal"
+function drawWall(x,y){
+    ctx.fillStyle = "#1E4DFF";
+    ctx.fillRect(
+        LEFT_OFFSET + x*tileSize,
+        TOP_OFFSET  + y*tileSize,
+        tileSize, tileSize
     );
+}
 
-    panel.style.display =
-    "flex";
 
-    document
-    .getElementById(
-        "mensajeTitulo"
-    )
-    .textContent =
-    title;
+/* =====================================================
+   DIBUJAR EMOJI — [FIX #10] usa LEFT_OFFSET
+===================================================== */
 
-    document
-    .getElementById(
-        "mensajePuntos"
-    )
-    .textContent =
-    `${pts} puntos`;
+function drawEmoji(emoji, x, y){
+
+    ctx.font         = `${tileSize*0.8}px Arial`;
+    ctx.textAlign    = "center";
+    ctx.textBaseline = "middle";
+
+    ctx.fillText(
+        emoji,
+        LEFT_OFFSET + x*tileSize + tileSize/2,
+        TOP_OFFSET  + y*tileSize + tileSize/2
+    );
 
 }
 
-function winGame(){
-document
-.getElementById(
-    "hudPuntos"
-)
-.textContent =
-"20";
-    if(
-        gameEnded
-    ) return;
 
-    gameEnded = true;
+/* =====================================================
+   DIBUJAR ESTRELLAS / BLOQUEOS / STOP
+===================================================== */
 
-    gameRunning = false;
+function drawStars(){
+    estrellasMapa.forEach(star => {
+        if(!star.active) return;
+        drawEmoji("⭐", star.x, star.y);
+    });
+}
 
-    puntos = 20;
+function drawPlacedStars(){
+    estrellasBloqueo.forEach(star => {
+        drawEmoji("⭐", star.x, star.y);
+    });
+}
 
-    soundWin();
+function drawStop(){
+    if(!stopItem || !stopItem.active) return;
+    drawEmoji("🛑", stopItem.x, stopItem.y);
+}
 
-    showFinalScreen(
 
-        "¡MISIÓN COMPLETADA!",
+/* =====================================================
+   DIBUJAR LABERINTO
+===================================================== */
 
-        "+20"
+function drawMaze(){
 
-    );
+    ctx.clearRect(0,0,canvas.width,canvas.height);
 
-    sendResultAndExit();
+    for(let y=0;y<GRID_SIZE;y++){
+        for(let x=0;x<GRID_SIZE;x++){
+            if(maze[y][x]===1) drawWall(x,y);
+        }
+    }
 
 }
 
-function loseGame(){
-document
-.getElementById(
-    "hudPuntos"
-)
-.textContent =
-"-10";
-    if(
-        gameEnded
-    ) return;
 
-    gameEnded = true;
+/* =====================================================
+   RENDER COMPLETO
+===================================================== */
 
-    gameRunning = false;
+function render(){
 
-    puntos = -10;
+    drawMaze();
+    drawStars();
+    drawPlacedStars();
+    drawStop();
 
-    soundLose();
+    drawEmoji(sensei.emoji, sensei.x, sensei.y);
 
-    showFinalScreen(
-
-        "¡CAPTURADO POR LOS NINJAS!",
-
-        "-10"
-
-    );
-
-    sendResultAndExit();
+    ninjas.forEach(ninja => drawEmoji(ninja.emoji, ninja.x, ninja.y));
 
 }
 
@@ -1908,24 +930,12 @@ document
 
 function updateGame(delta){
 
-    if(
-        !gameRunning
-    ){
-        return;
-    }
+    if(!gameRunning) return;
 
-    updateSensei(
-        delta
-    );
-
+    updateSensei(delta);
     updateStopSpawn();
-
-    moveNinjas(
-        delta
-    );
-
+    moveNinjas(delta);
     checkCapture();
-
     updateTimer();
 
 }
@@ -1935,131 +945,340 @@ function updateGame(delta){
    GAME LOOP
 ===================================================== */
 
-let lastTime =
-performance.now();
+let lastTime = performance.now();
 
 function gameLoop(now){
 
-    const delta =
-    (now-lastTime)/1000;
+    const delta = (now - lastTime) / 1000;
+    lastTime    = now;
 
-    lastTime =
-    now;
-
-    updateGame(
-        delta
-    );
-
+    updateGame(delta);
     render();
 
-    animationFrame =
-    requestAnimationFrame(
-        gameLoop
-    );
+    animationFrame = requestAnimationFrame(gameLoop);
 
 }
 
+
 /* =====================================================
-   CONSULTA APPS SCRIPT
+   AUDIO
+===================================================== */
+
+const audioCtx =
+new (window.AudioContext || window.webkitAudioContext)();
+
+function playTone(freq, duration, type="sine"){
+
+    const osc  = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+
+    osc.type           = type;
+    osc.frequency.value = freq;
+
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+
+    gain.gain.value = 0.15;
+
+    osc.start();
+
+    gain.gain.exponentialRampToValueAtTime(
+        0.0001,
+        audioCtx.currentTime + duration
+    );
+
+    osc.stop(audioCtx.currentTime + duration);
+
+}
+
+function soundCollectStar(){
+    playTone(900, .12, "triangle");
+    setTimeout(()=>playTone(1200,.12,"triangle"),60);
+}
+
+function soundPlaceStar(){
+    playTone(400,.18,"square");
+}
+
+function soundStop(){
+    playTone(250,.25,"sawtooth");
+    setTimeout(()=>playTone(500,.25,"sawtooth"),100);
+}
+
+function soundWin(){
+    playTone(600,.15);
+    setTimeout(()=>playTone(800,.15),150);
+    setTimeout(()=>playTone(1000,.25),300);
+}
+
+function soundLose(){
+    playTone(250,.45,"square");
+}
+
+
+/* =====================================================
+   JOYSTICK — [FIX #6] eventos en document para
+   capturar touchend aunque el dedo salga del área
+===================================================== */
+
+const joystickBase  = document.getElementById("joystickBase");
+const joystickStick = document.getElementById("joystickStick");
+
+let joystickActive  = false;
+let joystickTouchId = null;
+const JOY_RADIUS    = 55;
+
+joystickBase.addEventListener("touchstart", e => {
+    e.preventDefault();
+    if(joystickActive) return;
+    const touch       = e.changedTouches[0];
+    joystickTouchId   = touch.identifier;
+    joystickActive    = true;
+    processJoystick(touch);
+}, {passive:false});
+
+/*
+ * [FIX #6] touchmove y touchend escuchan en document
+ * para no perder el evento si el dedo sale del base.
+ */
+document.addEventListener("touchmove", e => {
+    if(!joystickActive) return;
+    for(const touch of e.changedTouches){
+        if(touch.identifier === joystickTouchId){
+            e.preventDefault();
+            processJoystick(touch);
+            break;
+        }
+    }
+}, {passive:false});
+
+document.addEventListener("touchend", e => {
+    for(const touch of e.changedTouches){
+        if(touch.identifier === joystickTouchId){
+            joystickActive  = false;
+            joystickTouchId = null;
+            resetJoystickVisual();
+            break;
+        }
+    }
+});
+
+document.addEventListener("touchcancel", e => {
+    joystickActive  = false;
+    joystickTouchId = null;
+    resetJoystickVisual();
+});
+
+function resetJoystickVisual(){
+    joystickStick.style.left = "32px";
+    joystickStick.style.top  = "32px";
+    /* [NUEVO] Al soltar el joystick NO se modifica la dirección pendiente.
+       El sensei sigue moviéndose en la última dirección indicada. */
+}
+
+function processJoystick(touch){
+
+    const rect = joystickBase.getBoundingClientRect();
+
+    let dx = touch.clientX - (rect.left + 60);
+    let dy = touch.clientY - (rect.top  + 60);
+
+    const distance = Math.sqrt(dx*dx + dy*dy);
+
+    if(distance > JOY_RADIUS){
+        dx = dx/distance * JOY_RADIUS;
+        dy = dy/distance * JOY_RADIUS;
+    }
+
+    joystickStick.style.left = (32 + dx) + "px";
+    joystickStick.style.top  = (32 + dy) + "px";
+
+    /*
+     * [NUEVO] Convertir el ángulo del joystick a una de las
+     * 4 direcciones ortogonales (igual que Pac-Man).
+     * Solo se registra si el desplazamiento supera el umbral
+     * (evita cambios accidentales con pequeños roces).
+     */
+    const THRESHOLD = JOY_RADIUS * 0.3;
+
+    if(distance < THRESHOLD) return;
+
+    /* Determinar eje dominante */
+    if(Math.abs(dx) >= Math.abs(dy)){
+        /* Horizontal */
+        sensei.pendingDirX = dx > 0 ? 1 : -1;
+        sensei.pendingDirY = 0;
+    } else {
+        /* Vertical */
+        sensei.pendingDirX = 0;
+        sensei.pendingDirY = dy > 0 ? 1 : -1;
+    }
+
+}
+
+/* Soporte teclado (útil en desktop) */
+document.addEventListener("keydown", e => {
+
+    if(!gameRunning) return;
+
+    switch(e.key){
+        case "ArrowUp":    case "w": case "W":
+            sensei.pendingDirX=0; sensei.pendingDirY=-1; break;
+        case "ArrowDown":  case "s": case "S":
+            sensei.pendingDirX=0; sensei.pendingDirY=1;  break;
+        case "ArrowLeft":  case "a": case "A":
+            sensei.pendingDirX=-1; sensei.pendingDirY=0; break;
+        case "ArrowRight": case "d": case "D":
+            sensei.pendingDirX=1;  sensei.pendingDirY=0; break;
+    }
+
+});
+
+
+/* =====================================================
+   SOLTAR ESTRELLA
+===================================================== */
+
+document.getElementById("btnSoltar").addEventListener("click", () => {
+
+    if(estrellasInventario <= 0) return;
+
+    const gx = Math.round(sensei.x);
+    const gy = Math.round(sensei.y);
+
+    const nuevaEstrella = { x:gx, y:gy };
+
+    estrellasBloqueo.push(nuevaEstrella);
+
+    setTimeout(() => {
+        const index = estrellasBloqueo.indexOf(nuevaEstrella);
+        if(index !== -1) estrellasBloqueo.splice(index,1);
+    }, 5000);
+
+    estrellasInventario--;
+
+    document.getElementById("hudEstrellas").textContent =
+        estrellasInventario;
+
+    soundPlaceStar();
+
+});
+
+
+/* =====================================================
+   FIN DE PARTIDA
+===================================================== */
+
+let gameEnded = false;
+
+function showFinalScreen(title, pts){
+
+    cancelAnimationFrame(animationFrame);
+
+    const panel = document.getElementById("mensajeFinal");
+    panel.style.display = "flex";
+
+    document.getElementById("mensajeTitulo").textContent = title;
+    document.getElementById("mensajePuntos").textContent = `${pts} puntos`;
+
+    /* [FIX #7] Mostrar botón de retorno */
+    document.getElementById("btnVolver").style.display = "block";
+
+}
+
+function winGame(){
+
+    if(gameEnded) return;
+    gameEnded   = true;
+    gameRunning = false;
+    puntos      = 20;  /* [FIX #1] asignar antes de enviar */
+
+    soundWin();
+
+    showFinalScreen("¡MISIÓN COMPLETADA!", "+20");
+
+    sendResultAndExit();
+
+}
+
+function loseGame(){
+
+    if(gameEnded) return;
+    gameEnded   = true;
+    gameRunning = false;
+    puntos      = -10; /* [FIX #1] asignar antes de enviar */
+
+    soundLose();
+
+    showFinalScreen("¡CAPTURADO POR LOS NINJAS!", "-10");
+
+    sendResultAndExit();
+
+}
+
+
+/* =====================================================
+   CONSULTA APPS SCRIPT — [FIX #4] fallback de red
 ===================================================== */
 
 async function verificarIntentos(){
 
+    const btn           = document.getElementById("btnIniciar");
+    const estadoEl      = document.getElementById("estadoIntentos");
+
     try{
 
-        const response =
-        await fetch(
-            SCRIPT_URL
+        const response = await fetch(SCRIPT_URL);
+        const data     = await response.json();
+
+        const retoInfo = data.retos.find(
+            r => r.nombre.toUpperCase() === "LABERINTO"
         );
 
-        const data =
-        await response.json();
-
-        const retoInfo =
-        data.retos.find(
-
-            r=>
-            r.nombre
-            .toUpperCase()
-            ===
-            "LABERINTO"
-
-        );
-
-        if(
-            !retoInfo
-        ){
-
-            document
-            .getElementById(
-                "estadoIntentos"
-            )
-            .textContent =
-            "Reto no encontrado";
-
+        if(!retoInfo){
+            estadoEl.textContent = "Reto no encontrado en catálogo.";
+            /* [FIX #4] Permitir jugar si el reto no se encuentra */
+            btn.disabled = false;
+            btn.textContent = "INICIAR";
             return;
-
         }
 
-        intentosPermitidos =
-        Number(
-            retoInfo.diario_permitido
-        ) || 0;
+        intentosPermitidos = Number(retoInfo.diario_permitido) || 0;
 
-        const key =
-        `${nombre}_LABERINTO`;
+        const key = `${nombre}_LABERINTO`;
+        intentosRealizados = Number(data.intentosHoy[key]) || 0;
 
-        intentosRealizados =
-        Number(
-            data.intentosHoy[key]
-        ) || 0;
+        const disponible = intentosRealizados < intentosPermitidos;
 
-        const disponible =
-        intentosRealizados <
-        intentosPermitidos;
+        btn.disabled    = !disponible;
+        btn.textContent = disponible ? "INICIAR" : "LÍMITE ALCANZADO";
 
-        const btn =
-        document
-        .getElementById(
-            "btnIniciar"
-        );
+        actualizarHudIntentos();
 
-        btn.disabled =
-        !disponible;
-
-        document
-        .getElementById(
-            "estadoIntentos"
-        )
-        .textContent =
-
-        disponible
-
-        ?
-
-        `Intentos disponibles: ${
-            intentosPermitidos -
-            intentosRealizados
-        }`
-
-        :
-
-        "Has alcanzado el límite diario";
+        estadoEl.textContent = disponible
+            ? `Intentos disponibles: ${intentosPermitidos - intentosRealizados}`
+            : "Has alcanzado el límite diario de intentos.";
 
     }
     catch(error){
 
         console.error(error);
 
-        document
-        .getElementById(
-            "estadoIntentos"
-        )
-        .textContent =
-        "Error de conexión";
+        /*
+         * [FIX #4] Si hay error de red, habilitar el botón
+         * como fallback (patrón estándar del ecosistema).
+         */
+        estadoEl.textContent = "Sin conexión — se permite continuar.";
+        btn.disabled         = false;
+        btn.textContent      = "INICIAR";
 
     }
 
+}
+
+function actualizarHudIntentos(){
+    document.getElementById("hudIntentos").textContent =
+        `${intentosRealizados}/${intentosPermitidos}`;
 }
 
 
@@ -2069,32 +1288,24 @@ async function verificarIntentos(){
 
 function sendResult(){
 
-    const data = {
+    fetch(SCRIPT_URL, {
+        method:  "POST",
+        mode:    "no-cors",
+        headers: {"Content-Type":"application/json"},
+        body:    JSON.stringify({
+            nombre_alumno: nombre,
+            nombre_reto:   "LABERINTO",
+            puntos:        puntos
+        })
+    }).catch(err => console.log("Nota de red:", err));
 
-        nombre_alumno: nombre,
-
-        nombre_reto: "LABERINTO",
-
-        puntos: puntos
-
-    };
-
-    fetch(
-        SCRIPT_URL,
-        {
-            method: "POST",
-            mode: "no-cors",
-            headers: {
-                "Content-Type": "application/json"
-            },
-            body: JSON.stringify(data)
-        }
-    ).catch(
-        err => console.log(
-            "Nota de red asíncrona:",
-            err
-        )
-    );
+    /*
+     * [FIX #2] Incrementar contador local para que el HUD
+     * refleje el intento recién realizado, incluso si el
+     * usuario permanece en la pantalla un momento.
+     */
+    intentosRealizados++;
+    actualizarHudIntentos();
 
 }
 
@@ -2105,20 +1316,8 @@ function sendResult(){
 
 function regresarPortal(){
 
-    const params =
-    new URLSearchParams({
-
-        nombre,
-        edad,
-        reto,
-        estatura,
-        peso
-
-    });
-
-    window.location.href =
-
-    `${PORTAL_URL}?${params}`;
+    const p = new URLSearchParams({nombre,edad,reto,estatura,peso});
+    window.location.href = `${PORTAL_URL}?${p}`;
 
 }
 
@@ -2131,14 +1330,12 @@ function sendResultAndExit(){
 
     sendResult();
 
-    setTimeout(
-        ()=>{
-            regresarPortal();
-        },
-        3500
-    );
+    /* [FIX #7] El botón también navega de inmediato */
+    setTimeout(() => { regresarPortal(); }, 3500);
 
 }
+
+document.getElementById("btnVolver").addEventListener("click", regresarPortal);
 
 
 /* =====================================================
@@ -2147,78 +1344,38 @@ function sendResultAndExit(){
 
 function startGame(){
 
-    document
-    .getElementById(
-        "pantallaInicio"
-    )
-    .style.display =
-    "none";
+    document.getElementById("pantallaInicio").style.display = "none";
+    document.getElementById("gameContainer").style.display  = "block";
 
-    document
-    .getElementById(
-        "gameContainer"
-    )
-    .style.display =
-    "block";
+    resizeCanvas();
 
-    gameRunning =
-    true;
+    gameRunning  = true;
+    gameEnded    = false;
+    puntos       = 0;
+    remainingTime = GAME_DURATION;
 
-    gameEnded =
-    false;
+    stopActivo   = false;
+    stopAparecio = false;
+    stopItem     = null;
 
-    puntos = 0;
+    /* [FIX #3] Tiempo de spawn aleatorio, variable LOCAL */
+    stopSpawnTime = 10 + Math.random() * 10;
 
-    remainingTime =
-    GAME_DURATION;
+    ninjaSpeedMultiplier = 1;
+    estrellasInventario  = 0;
+    estrellasBloqueo     = [];
 
-    stopActivo =
-    false;
-
-    stopAparecio =
-    false;
-
-    stopItem =
-    null;
-
-    ninjaSpeedMultiplier =
-    1;
-
-    estrellasInventario =
-    0;
-
-    estrellasBloqueo =
-    [];
-
-    document
-    .getElementById(
-        "hudEstrellas"
-    )
-    .textContent =
-    "0";
-
-    document
-    .getElementById(
-        "hudPuntos"
-    )
-    .textContent =
-    "0";
+    document.getElementById("hudEstrellas").textContent = "0";
+    actualizarHudIntentos();
 
     createMaze();
-
     createCharacters();
-
     generateStars();
 
-    gameStartTime =
-    Date.now();
+    gameStartTime = Date.now();
+    lastTime      = performance.now();
 
-    lastTime =
-    performance.now();
-
-    requestAnimationFrame(
-        gameLoop
-    );
+    requestAnimationFrame(gameLoop);
 
 }
 
@@ -2227,57 +1384,34 @@ function startGame(){
    BOTÓN INICIAR
 ===================================================== */
 
-document
-.getElementById(
-    "btnIniciar"
-)
-.addEventListener(
+document.getElementById("btnIniciar").addEventListener("click", () => {
 
-    "click",
-
-    ()=>{
-
-        if(
-            audioCtx.state ===
-            "suspended"
-        ){
-
-            audioCtx.resume();
-
-        }
-
-        startGame();
-
+    if(audioCtx.state === "suspended"){
+        audioCtx.resume();
     }
 
-);
+    startGame();
+
+});
 
 
 /* =====================================================
    PREVENIR SCROLL
 ===================================================== */
 
-document
-.addEventListener(
-
-    "touchmove",
-
-    function(e){
-
-        e.preventDefault();
-
-    },
-
-    {
-        passive:false
-    }
-
-);
+document.addEventListener("touchmove", function(e){
+    e.preventDefault();
+}, {passive:false});
 
 
 /* =====================================================
-   ARRANQUE
+   INICIALIZACIÓN
 ===================================================== */
+
+createMaze();
+createCharacters();
+generateStars();
+render();
 
 verificarIntentos();
 
@@ -2285,4 +1419,3 @@ verificarIntentos();
 
 </body>
 </html>
-
