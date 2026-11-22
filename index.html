@@ -298,13 +298,13 @@ const PUNTOS_GANAR  = 20;
 const PUNTOS_PERDER = -10;
 
 const SENSEI_SPEED = 5.5;   /* celdas por segundo */
-const NINJA_SPEED  = 5.0;   /* velocidad máxima de los ninjas (celdas/s) */
+const NINJA_SPEED  = 3.0;   /* velocidad máxima de los ninjas (celdas/s) */
 
 /* Los ninjas arrancan al 30 % de su velocidad y la aumentan de forma
    lineal hasta el 100 % en NINJA_RAMPA segundos. Para que se mantengan
    al 30 % todo el tiempo, ponga NINJA_RAMPA en 0 y NINJA_FACTOR_FINAL en 0.3. */
-const NINJA_FACTOR_INICIAL = 0.20;
-const NINJA_FACTOR_FINAL   = 0.80;
+const NINJA_FACTOR_INICIAL = 0.10;
+const NINJA_FACTOR_FINAL   = 0.40;
 const NINJA_RAMPA          = 59;   /* segundos */
 
 /* Celdas de salida (lejos del sensei; distancia por pasillos 32, 36 y 44) */
