@@ -298,7 +298,18 @@ const PUNTOS_GANAR  = 20;
 const PUNTOS_PERDER = -10;
 
 const SENSEI_SPEED = 5.5;   /* celdas por segundo */
-const NINJA_SPEED  = 5.0;
+const NINJA_SPEED  = 5.0;   /* velocidad máxima de los ninjas (celdas/s) */
+
+/* Los ninjas arrancan al 30 % de su velocidad y la aumentan de forma
+   lineal hasta el 100 % en NINJA_RAMPA segundos. Para que se mantengan
+   al 30 % todo el tiempo, ponga NINJA_RAMPA en 0 y NINJA_FACTOR_FINAL en 0.3. */
+const NINJA_FACTOR_INICIAL = 0.30;
+const NINJA_FACTOR_FINAL   = 1.00;
+const NINJA_RAMPA          = 30;   /* segundos */
+
+/* Celdas de salida (lejos del sensei; distancia por pasillos 32, 36 y 44) */
+const SENSEI_INICIO = [1, 1];
+const NINJAS_INICIO = [[15,15],[19,19],[1,17]];
 const STOP_DURACION    = 5;  /* s que los ninjas quedan congelados */
 const ESTRELLA_DURACION = 5; /* s que dura una estrella-bloqueo */
 const MAX_SUBSTEP  = 0.03;   /* paso máximo de simulación (s) */
@@ -450,9 +461,7 @@ function createCharacters(){
         emoji:"🥋"
     };
 
-    const esquinas = [[19,1],[1,19],[19,19]];
-
-    ninjas = esquinas.map(([x,y]) => ({
+    ninjas = NINJAS_INICIO.map(([x,y]) => ({
         x, y, fx:x, fy:y, tx:x, ty:y,
         dx:0, dy:0,
         moving:false,
@@ -478,7 +487,9 @@ function getRandomFreeCell(excluidas){
 
         if(maze[y][x] !== 0) continue;
 
-        if((x===1&&y===1)||(x===19&&y===1)||(x===1&&y===19)||(x===19&&y===19)) continue;
+        /* Celdas de salida reservadas */
+        if((x===SENSEI_INICIO[0] && y===SENSEI_INICIO[1]) ||
+           NINJAS_INICIO.some(c => c[0]===x && c[1]===y)) continue;
 
         if(excluidas.some(c => c.x===x && c.y===y)) continue;
 
@@ -715,7 +726,7 @@ function getPath(sx,sy,ex,ey){
 
 function moveNinja(n, dt){
 
-    let rem = n.speed * ninjaSpeedMultiplier * dt;
+    let rem = n.speed * ninjaFactorVelocidad() * ninjaSpeedMultiplier * dt;
 
     /* Si una estrella les cierra el paso, regresan a la celda anterior */
     if(n.moving && isBlockedForNinja(n.tx, n.ty)){
@@ -759,6 +770,12 @@ function moveNinja(n, dt){
 
     }
 
+}
+
+/* Factor de velocidad según el tiempo de juego (30 % → 100 %) */
+function ninjaFactorVelocidad(){
+    const t = NINJA_RAMPA > 0 ? Math.min(1, gameTime / NINJA_RAMPA) : 1;
+    return NINJA_FACTOR_INICIAL + (NINJA_FACTOR_FINAL - NINJA_FACTOR_INICIAL) * t;
 }
 
 function moveNinjas(dt){
